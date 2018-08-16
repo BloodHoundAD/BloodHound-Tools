@@ -11,6 +11,8 @@ pip install neo4j-driver
 ```
 
 ## Running
+Ensure that all files in this repo are in the same directory.
+
 ```
 python DBCreator.py
 ```
