@@ -2,7 +2,7 @@
 This python script will generate a randomized data set for testing BloodHound features and analysis. 
 
 ## Requirements
-This script requires Python 2.7, as well as the neo4j-driver. 
+This script requires Python 2.7, as well as the neo4j-driver. The script will only work with BloodHound 2.0.3 and above.
 
 The Neo4j Driver can be installed using pip:
 
