@@ -24,3 +24,4 @@ python DBCreator.py
 * cleardb - Clears the database and sets the schema properly
 * generate - Generates random data in the database
 * clear_and_generate - Connects to the database, clears the DB, sets the schema, and generates random data
+* exit - Exits the script

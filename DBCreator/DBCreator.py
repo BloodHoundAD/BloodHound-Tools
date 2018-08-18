@@ -51,12 +51,34 @@ class MainMenu(cmd.Cmd):
 	def cmdloop(self):
 		while True:
 			self.m.title()
+			self.do_help("")
 			try:
 				cmd.Cmd.cmdloop(self)
 			except KeyboardInterrupt:
 				if self.driver is not None:
 					self.driver.close()
 				raise KeyboardInterrupt
+
+	def help_dbconfig(self):
+		print "Configure database connection parameters"
+
+	def help_connect(self):
+		print "Test connection to the database and verify credentials"
+
+	def help_setnodes(self):
+		print "Set base number of nodes to generate (default 500)"
+
+	def help_cleardb(self):
+		print "Clear the database and set constraints"
+
+	def help_generate(self):
+		print "Generate random data"
+
+	def help_clear_and_generate(self):
+		print "Connect to the database, clear the db, set the schema, and generate random data"
+
+	def help_exit(self):
+		print "Exits the database creator"
 
 	def do_dbconfig(self, args):
 		print "Current Settings:"
@@ -199,47 +221,47 @@ class MainMenu(cmd.Cmd):
 		print "Adding Standard Edges"
 		
 		#Default GPOs
-		session.run('MERGE (n:GPO {name:"DEFAULT DOMAIN POLICY@TESTLAB.LOCAL"}) MERGE (m:Domain {name:"TESTLAB.LOCAL"}) MERGE (n)-[:GpLink {isACL:false, enforced:toBoolean(false)}]->(m)')
-		session.run('MERGE (n:Domain {name:"TESTLAB.LOCAL"}) MERGE (m:OU {guid:{guid}}) MERGE (n)-[:Contains {isACL:false}]->(m)', guid=dcou)
-		session.run('MERGE (n:GPO {name:"DEFAULT DOMAIN CONTROLLERS POLICY@TESTLAB.LOCAL"}) MERGE (m:OU {guid:{guid}}) MERGE (n)-[:GpLink {isACL:false, enforced:toBoolean(false)}]->(m)', guid=dcou)
+		session.run('MERGE (n:GPO {name:"DEFAULT DOMAIN POLICY@TESTLAB.LOCAL"}) MERGE (m:Domain {name:"TESTLAB.LOCAL"}) MERGE (n)-[:GpLink {isacl:false, enforced:toBoolean(false)}]->(m)')
+		session.run('MERGE (n:Domain {name:"TESTLAB.LOCAL"}) MERGE (m:OU {guid:{guid}}) MERGE (n)-[:Contains {isacl:false}]->(m)', guid=dcou)
+		session.run('MERGE (n:GPO {name:"DEFAULT DOMAIN CONTROLLERS POLICY@TESTLAB.LOCAL"}) MERGE (m:OU {guid:{guid}}) MERGE (n)-[:GpLink {isacl:false, enforced:toBoolean(false)}]->(m)', guid=dcou)
 
 		#Ent Admins -> Domain Node
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) MERGE (m:Group {name:"ENTERPRISE ADMINS@TESTLAB.LOCAL"}) MERGE (m)-[:GenericAll {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) MERGE (m:Group {name:"ENTERPRISE ADMINS@TESTLAB.LOCAL"}) MERGE (m)-[:GenericAll {isacl:true}]->(n)')
 		
 		#Administrators -> Domain Node
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) MERGE (m)-[:Owns {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) MERGE (m)-[:Owns {isacl:true}]->(n)')
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:WriteOwner {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:WriteOwner {isacl:true}]->(n)')
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:WriteDacl {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:WriteDacl {isacl:true}]->(n)')
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:DCSync {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:DCSync {isacl:true}]->(n)')
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChanges {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChanges {isacl:true}]->(n)')
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChangesAll {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChangesAll {isacl:true}]->(n)')
 		
 		#Domain Admins -> Domain Node
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:WriteOwner {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:WriteOwner {isacl:true}]->(n)')
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:WriteDacl {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:WriteDacl {isacl:true}]->(n)')
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:DCSync {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:DCSync {isacl:true}]->(n)')
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChanges {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChanges {isacl:true}]->(n)')
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChangesAll {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChangesAll {isacl:true}]->(n)')
 		
 		#DC Groups -> Domain Node
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ENTERPRISE DOMAIN CONTROLLERS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChanges {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ENTERPRISE DOMAIN CONTROLLERS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChanges {isacl:true}]->(n)')
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ENTERPRISE READ-ONLY DOMAIN CONTROLLERS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChanges {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ENTERPRISE READ-ONLY DOMAIN CONTROLLERS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChanges {isacl:true}]->(n)')
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN CONTROLLERS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChangesAll {isACL:true}]->(n)')
+			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN CONTROLLERS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChangesAll {isacl:true}]->(n)')
 
 		print "Generating Computer Nodes"
 		props = []
@@ -493,28 +515,28 @@ class MainMenu(cmd.Cmd):
 			props.append({'name':x})
 
 			if len(props) > 500:
-				session.run('UNWIND {props} as prop MATCH (n:Computer {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isACL:true}]->(n)', props=props)
+				session.run('UNWIND {props} as prop MATCH (n:Computer {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props)
 				props = []
 		
-		session.run('UNWIND {props} as prop MATCH (n:Computer {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isACL:true}]->(n)', props=props)
+		session.run('UNWIND {props} as prop MATCH (n:Computer {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props)
 
 		for x in users:
 			props.append({'name':x})
 
 			if len(props) > 500:
-				session.run('UNWIND {props} as prop MATCH (n:User {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isACL:true}]->(n)', props=props)
+				session.run('UNWIND {props} as prop MATCH (n:User {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props)
 				props = []
 		
-		session.run('UNWIND {props} as prop MATCH (n:User {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isACL:true}]->(n)', props=props)
+		session.run('UNWIND {props} as prop MATCH (n:User {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props)
 
 		for x in groups:
 			props.append({'name':x})
 
 			if len(props) > 500:
-				session.run('UNWIND {props} as prop MATCH (n:Group {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isACL:true}]->(n)', props=props)
+				session.run('UNWIND {props} as prop MATCH (n:Group {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props)
 				props = []
 		
-		session.run('UNWIND {props} as prop MATCH (n:Group {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isACL:true}]->(n)', props=props)
+		session.run('UNWIND {props} as prop MATCH (n:Group {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props)
 
 		print "Creating OUs"
 		temp_comps = computers
@@ -598,7 +620,7 @@ class MainMenu(cmd.Cmd):
 		props = []
 		for i in acl_groups:
 			ace = random.choice(acl_list)
-			ace_string = '[r:' + ace + '{isACL:true}]'
+			ace_string = '[r:' + ace + '{isacl:true}]'
 			if ace == "GenericAll" or ace == 'GenericWrite' or ace == 'WriteOwner' or ace == 'WriteDacl':
 				p = random.choice(all_principals)
 				p2 = random.choice(gpos)
