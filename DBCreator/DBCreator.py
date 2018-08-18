@@ -298,19 +298,26 @@ class MainMenu(cmd.Cmd):
 			last = random.choice(self.last_names)
 			user_name = "{}{}{:05d}@TESTLAB.LOCAL".format(first[0], last,i).upper()
 			users.append(user_name)
-			# dispname = "{} {}".format(first,last)
-			# enabled = True
-			# pwdlastset = self.generate_timestamp()
-			# lastlogon = self.generate_timestamp()
-			# sidint = i + 1000
+			dispname = "{} {}".format(first,last)
+			enabled = True
+			pwdlastset = self.generate_timestamp()
+			lastlogon = self.generate_timestamp()
+			sidint = i + 1000
+			objectsid = self.base_sid + "-" + str(sidint)
 			
-			props.append({'name':user_name})
+			props.append({'name':user_name, 'props': {
+				'displayname': dispname,
+				'enabled': enabled,
+				'pwdlastset': pwdlastset,
+				'lastlogon': lastlogon,
+				'objectsid': objectsid
+			}})
 			if (len(props) > 500):
 				session.run(
-					'UNWIND {props} as prop MERGE (n:User {name:prop.name}) WITH n MERGE (m:Group {name:"DOMAIN USERS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
+					'UNWIND {props} as prop MERGE (n:User {name:prop.name}) SET n += prop.props WITH n MERGE (m:Group {name:"DOMAIN USERS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
 				props = []
 		session.run(
-			'UNWIND {props} as prop MERGE (n:User {name:prop.name}) WITH n MERGE (m:Group {name:"DOMAIN USERS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
+			'UNWIND {props} as prop MERGE (n:User {name:prop.name}) SET n += prop.props WITH n MERGE (m:Group {name:"DOMAIN USERS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
 
 		
 		print "Generating Group Nodes"
