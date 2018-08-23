@@ -272,8 +272,8 @@ class MainMenu(cmd.Cmd):
 			os = random.choice(os_list)
 			enabled = True
 			props.append({'name':comp_name, 'props':{
-				'os':os,
-				'enabked':enabled
+				'operatingsystem':os,
+				'enabled':enabled
 			}})
 
 			if (len(props) > 500):
