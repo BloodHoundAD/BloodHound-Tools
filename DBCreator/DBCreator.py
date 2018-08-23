@@ -196,6 +196,7 @@ class MainMenu(cmd.Cmd):
 
 		states = ["WA","MD","AL","IN","NV","VA","CA","NY","TX","FL"]
 		partitions = ["IT","HR","MARKETING","OPERATIONS","BIDNESS"]
+		os_list = ["Windows Server 2003"] * 1 + ["Windows Server 2008"] * 15 + ["Windows 7"] * 35 + ["Windows 10"] * 28 + ["Windows XP"] * 1 + ["Windows Server 2012"] * 8 + ["Windows Server 2008"] * 12
 		session = self.driver.session()
 
 		print "Starting data generation with nodes={}".format(self.num_nodes)
@@ -266,12 +267,17 @@ class MainMenu(cmd.Cmd):
 		print "Generating Computer Nodes"
 		props = []
 		for i in xrange(1,self.num_nodes+1):
-			comp_name = "COMP{:05d}@TESTLAB.LOCAL".format(i)
+			comp_name = "COMP{:05d}.TESTLAB.LOCAL".format(i)
 			computers.append(comp_name)
-			props.append({'name':comp_name})
+			os = random.choice(os_list)
+			enabled = True
+			props.append({'name':comp_name, 'props':{
+				'os':os,
+				'enabked':enabled
+			}})
 
 			if (len(props) > 500):
-				session.run('UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) WITH n MERGE (m:Group {name:"DOMAIN COMPUTERS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
+				session.run('UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) SET n += prop.props WITH n MERGE (m:Group {name:"DOMAIN COMPUTERS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
 				props = []
 		session.run('UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) WITH n MERGE (m:Group {name:"DOMAIN COMPUTERS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
 
@@ -291,7 +297,6 @@ class MainMenu(cmd.Cmd):
 		used_states = list(set(used_states))
 
 		print "Generating User Nodes"
-		current_time = int(time.time())
 		props = []
 		for i in xrange(1, self.num_nodes+1):
 			first = random.choice(self.first_names)
@@ -457,7 +462,7 @@ class MainMenu(cmd.Cmd):
 
 		session.run('UNWIND {props} AS prop MERGE (n:Group {name:prop.a}) WITH n,prop MERGE (m:Computer {name:prop.b}) WITH n,m MERGE (n)-[:AdminTo]->(m)', props=props)
 		
-		print "Adding RDP/ExecuteDCOM"
+		print "Adding RDP/ExecuteDCOM/AllowedToDelegateTo"
 		count = int(math.floor(len(computers) * .1))
 		props = []
 		for i in xrange(0, count):
@@ -494,6 +499,25 @@ class MainMenu(cmd.Cmd):
 		
 
 		session.run('UNWIND {props} AS prop MERGE (n:Group {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:ExecuteDCOM]->(m)', props=props)
+
+		props = []
+		for i in xrange(0, count):
+			comp = random.choice(computers)
+			user = random.choice(it_users)
+			props.append({'a': user, 'b': comp})
+		
+
+		session.run('UNWIND {props} AS prop MERGE (n:User {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:AllowedToDelegate]->(m)', props=props)
+
+		props = []
+		for i in xrange(0, count):
+			comp = random.choice(computers)
+			user = random.choice(computers)
+			if (comp == user):
+				continue
+			props.append({'a': user, 'b': comp})
+		
+		session.run('UNWIND {props} AS prop MERGE (n:Computer {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:AllowedToDelegate]->(m)', props=props)
 
 		print "Adding sessions"
 		max_sessions_per_user = int(math.ceil(math.log10(self.num_nodes)))
@@ -645,14 +669,15 @@ class MainMenu(cmd.Cmd):
 				session.run('MERGE (n:Group {name:{group}}) MERGE (m:User {name:{principal}}) MERGE (n)-' + ace_string + '->(m)', group=i, principal=p)
 
 		print "Marking some users as Kerberoastable"
-		i = min(5, len(it_users))
+		i = random.randint(10,20)
+		i = min(i, len(it_users))
 		for user in random.sample(it_users,i):
 			session.run('MATCH (n:User {name:{user}}) SET n.hasspn=true', user=user)
 
 		print "Adding unconstrained delegation to a few computers"
-		i = min(5, len(it_users))
-		for user in random.sample(computers,i):
-			session.run('MATCH (n:Computer {name:{user}}) SET n.hasspn=true', user=user)
+		i = random.randint(10,20)
+		i = min(i, len(computers))
+		session.run('MATCH (n:Computer {name:{user}}) SET n.unconstrainteddelegation=true', user=user)
 
 		session.run('MATCH (n:User) SET n.owned=false')
 		session.run('MATCH (n:Computer) SET n.owned=false')
