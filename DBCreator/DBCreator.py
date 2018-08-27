@@ -35,7 +35,7 @@ class MainMenu(cmd.Cmd):
 		self.m = Messages()
 		self.url = "bolt://localhost:7687"
 		self.username = "neo4j"
-		self.password = "bloodhound"
+		self.password = "neo4jj"
 		self.driver = None
 		self.connected = False
 		self.num_nodes = 500
