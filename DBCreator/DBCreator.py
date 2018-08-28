@@ -374,7 +374,6 @@ class MainMenu(cmd.Cmd):
 		for i in xrange(1, self.num_nodes + 1):
 			dept = random.choice(weighted_parts)
 			group_name = "{}{:05d}@{}".format(dept, i, self.domain)
-			group_name = group_name.format(dept,i)
 			groups.append(group_name)
 			props.append({'name':group_name})
 			if len(props) > 500:
