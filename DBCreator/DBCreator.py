@@ -215,6 +215,7 @@ class MainMenu(cmd.Cmd):
 
 		states = ["WA","MD","AL","IN","NV","VA","CA","NY","TX","FL"]
 		partitions = ["IT","HR","MARKETING","OPERATIONS","BIDNESS"]
+		os_list = ["Windows Server 2003"] * 1 + ["Windows Server 2008"] * 15 + ["Windows 7"] * 35 + ["Windows 10"] * 28 + ["Windows XP"] * 1 + ["Windows Server 2012"] * 8 + ["Windows Server 2008"] * 12
 		session = self.driver.session()
 
 		print "Starting data generation with nodes={}".format(self.num_nodes)
@@ -306,12 +307,16 @@ class MainMenu(cmd.Cmd):
 		props = []
 		for i in xrange(1,self.num_nodes+1):
 			comp_name = "COMP{:05d}.{}".format(i, self.domain)
-			comp_name = comp_name.format(i)
 			computers.append(comp_name)
-			props.append({'name':comp_name})
+			os = random.choice(os_list)
+			enabled = True
+			props.append({'name':comp_name, 'props':{
+				'operatingsystem':os,
+				'enabled':enabled
+			}})
 
 			if (len(props) > 500):
-				session.run('UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
+				session.run('UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) SET n += prop.props WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
 				props = []
 		session.run('UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
 
