@@ -512,7 +512,7 @@ class MainMenu(cmd.Cmd):
 
 		session.run('UNWIND {props} AS prop MERGE (n:Group {name:prop.a}) WITH n,prop MERGE (m:Computer {name:prop.b}) WITH n,m MERGE (n)-[:AdminTo]->(m)', props=props)
 		
-		print "Adding RDP/ExecuteDCOM"
+		print "Adding RDP/ExecuteDCOM/AllowedToDelegateTo"
 		count = int(math.floor(len(computers) * .1))
 		props = []
 		for i in xrange(0, count):
@@ -549,6 +549,25 @@ class MainMenu(cmd.Cmd):
 		
 
 		session.run('UNWIND {props} AS prop MERGE (n:Group {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:ExecuteDCOM]->(m)', props=props)
+
+		props = []
+		for i in xrange(0, count):
+			comp = random.choice(computers)
+			user = random.choice(it_users)
+			props.append({'a': user, 'b': comp})
+		
+
+		session.run('UNWIND {props} AS prop MERGE (n:User {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:AllowedToDelegate]->(m)', props=props)
+
+		props = []
+		for i in xrange(0, count):
+			comp = random.choice(computers)
+			user = random.choice(computers)
+			if (comp == user):
+				continue
+			props.append({'a': user, 'b': comp})
+		
+		session.run('UNWIND {props} AS prop MERGE (n:Computer {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:AllowedToDelegate]->(m)', props=props)
 
 		print "Adding sessions"
 		max_sessions_per_user = int(math.ceil(math.log10(self.num_nodes)))
@@ -701,14 +720,15 @@ class MainMenu(cmd.Cmd):
 				session.run('MERGE (n:Group {name:{group}}) MERGE (m:User {name:{principal}}) MERGE (n)-' + ace_string + '->(m)', group=i, principal=p)
 
 		print "Marking some users as Kerberoastable"
-		i = min(5, len(it_users))
+		i = random.randint(10,20)
+		i = min(i, len(it_users))
 		for user in random.sample(it_users,i):
 			session.run('MATCH (n:User {name:{user}}) SET n.hasspn=true', user=user)
 
 		print "Adding unconstrained delegation to a few computers"
-		i = min(5, len(it_users))
-		for user in random.sample(computers,i):
-			session.run('MATCH (n:Computer {name:{user}}) SET n.hasspn=true', user=user)
+		i = random.randint(10,20)
+		i = min(i, len(computers))
+		session.run('MATCH (n:Computer {name:{user}}) SET n.unconstrainteddelegation=true', user=user)
 
 		session.run('MATCH (n:User) SET n.owned=false')
 		session.run('MATCH (n:Computer) SET n.owned=false')
