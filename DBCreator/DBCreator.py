@@ -143,6 +143,8 @@ class MainMenu(cmd.Cmd):
 		session.run("CREATE CONSTRAINT ON (c:OU) ASSERT c.guid IS UNIQUE")
 		session.run("CREATE CONSTRAINT ON (c:GPO) ASSERT c.name IS UNIQUE")
 
+		session.close()
+
 		print "DB Cleared and Schema Set"
 
 	def test_db_conn(self):
@@ -682,6 +684,8 @@ class MainMenu(cmd.Cmd):
 		session.run('MATCH (n:User) SET n.owned=false')
 		session.run('MATCH (n:Computer) SET n.owned=false')
 		session.run('MATCH (n) SET n.domain="TESTLAB.LOCAL"')
+
+		session.close()
 
 		print "Database Generation Finished!"
 
