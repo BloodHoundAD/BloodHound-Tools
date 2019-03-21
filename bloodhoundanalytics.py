@@ -95,7 +95,7 @@ class FrontPage(object):
 			self.write_single_cell(
 				sheet, 4, 2, "HasSession: {:,}".format(result[0]))
 
-		for result in session.run("MATCH ()-[r:GpLink]-(n) WHERE n.name =~ '.*"+ self.domain +"$' RETURN count(r)"):
+		for result in session.run("MATCH ()-[r:GpLink]->(n) WHERE n.name =~ '.*"+ self.domain +"$' RETURN count(r)"):
 			self.write_single_cell(
 				sheet, 5, 2, "GpLinks: {:,}".format(result[0]))
 
