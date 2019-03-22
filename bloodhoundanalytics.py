@@ -95,7 +95,7 @@ class FrontPage(object):
 			self.write_single_cell(
 				sheet, 4, 2, "HasSession: {:,}".format(result[0]))
 
-		for result in session.run("MATCH ()-[r:GpLink]->(n) WHERE n.name =~ '.*"+ self.domain +"$' RETURN count(r)"):
+		for result in session.run("MATCH ()-[r:GpLink]-(n) WHERE n.name =~ '.*"+ self.domain +"$' RETURN count(r)"):
 			self.write_single_cell(
 				sheet, 5, 2, "GpLinks: {:,}".format(result[0]))
 
@@ -1090,7 +1090,6 @@ class MainMenu(cmd.Cmd):
 		self.domain_validated = False
 
 		cmd.Cmd.__init__(self)
-		self.create_workbook()
 
 	def do_changefilename(self, args):
 		if args == "":
@@ -1154,7 +1153,8 @@ class MainMenu(cmd.Cmd):
 			self.connected = True
 			print "Database Connection Successful!"
 			self.validate_domain()
-		except:
+		except Exception as e:
+			print e
 			self.connected = False
 			print "Database Connection Failed. Check your settings."
 
@@ -1167,15 +1167,16 @@ class MainMenu(cmd.Cmd):
 		session = self.driver.session()
 		for result in session.run("MATCH (n {domain:{domain}}) RETURN COUNT(n)", domain=self.domain):
 			if (int(result[0]) > 0):
-				print "Domain Validated"
+				print "Domain {domain} validated!".format(domain=self.domain)
 				self.domain_validated = True
+				self.create_workbook()
 				self.create_analytics()
 			else:
 				print "Invalid domain specified, use changedomain to pick a new one"
 	
 	def do_startanalysis(self, args):
 		if not self.connected:
-			print "Not connected to datbase. Use connect command"
+			print "Not connected to database. Use connect command"
 			return
 		
 		if not self.domain_validated:
@@ -1215,7 +1216,7 @@ class MainMenu(cmd.Cmd):
 	def create_workbook(self):
 		wb = Workbook()
 		ws = wb.active
-		ws.title = sys.argv[1] + " Overview"
+		ws.title = '{domain} Overview'.format(domain=self.domain)
 		wb.create_sheet(title="Critical Assets")
 		wb.create_sheet(title="Low Hanging Fruit")
 		wb.create_sheet(title="Cross Domain Attacks")
@@ -1234,7 +1235,7 @@ class MainMenu(cmd.Cmd):
 						pass
 				adjusted_width = (max_length + 2) * 1.2
 				worksheet.column_dimensions[column].width = adjusted_width
-		self.workbook.save("BloodHoundAnalytics.xlsx")
+		self.workbook.save(self.filename)
 
 
 if __name__ == '__main__':
