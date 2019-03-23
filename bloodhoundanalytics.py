@@ -11,235 +11,240 @@ from timeit import default_timer as timer
 # https://www.specterops.io
 # License: GPLv3
 
-class Messages(object):
-	def title(self):
-		print "================================================================"
-		print " BloodHound Analytics Generator"
-		print "   connect - connect to database"
-		print "   dbconfig - configure database settings"
-		print "   changedomain - change domain for analysis"
-		print "   startanalysis - start analysis for specified domain"
-		print "   changefilename - change output filename"
-		print "================================================================"
 
-	def input_default(self, prompt, default):
-		return raw_input("%s [%s] " % (prompt, default)) or default
+class Messages(object):
+    def title(self):
+        print "================================================================"
+        print " BloodHound Analytics Generator"
+        print "   connect - connect to database"
+        print "   dbconfig - configure database settings"
+        print "   changedomain - change domain for analysis"
+        print "   startanalysis - start analysis for specified domain"
+        print "   changefilename - change output filename"
+        print "================================================================"
+
+    def input_default(self, prompt, default):
+        return raw_input("%s [%s] " % (prompt, default)) or default
 
 
 class FrontPage(object):
-	def __init__(self, driver, domain, workbook):
-		self.driver = driver
-		self.domain = domain
-		self.col_count = 1
-		self.workbook = workbook
-	
-	def write_column_data(self, sheet, title, results):
-    		count = len(results)
-		offset = 10
-		font = styles.Font(bold=True)
-		c = sheet.cell(offset, self.col_count)
-		c.font = font
-		sheet.cell(offset, self.col_count, value=title.format(count))
-		for i in xrange(0, count):
-			sheet.cell(i+offset+1, self.col_count, value=results[i])
-		self.col_count += 1
+    def __init__(self, driver, domain, workbook):
+        self.driver = driver
+        self.domain = domain
+        self.col_count = 1
+        self.workbook = workbook
 
-	def write_single_cell(self, sheet, row, column, text):
-		sheet.cell(row, column, value=text)
+    # Mofidied function
+    def write_column_data(self, sheet, title, results):
+        count = len(results)
+        offset = 1
+        font = styles.Font(bold=True)
+        c = sheet.cell(offset, 4)
+        c.font = font
+        sheet.cell(offset, 4, value=title.format(count))
+        for i in xrange(0, count):
+            sheet.cell(i + offset + 1, 4, value=results[i])
 
-	def do_front_page_analysis(self):
-		func_list = [self.create_node_statistics,
-					 self.create_edge_statistics, 
-					 self.create_qa_statistics,
-					 self.create_highvalue_list]
-		sheet = self.workbook._sheets[0]
-		self.write_single_cell(sheet, 1, 1, "Node Statistics")
-		self.write_single_cell(sheet, 1, 2, "Edge Statistics")
-		self.write_single_cell(sheet, 1, 3, "QA Info")
-		font = styles.Font(bold=True)
-		sheet.cell(1, 1).font = font
-		sheet.cell(1, 2).font = font
-		sheet.cell(1, 3).font = font
+    def write_single_cell(self, sheet, row, column, text):
+        sheet.cell(row, column, value=text)
 
-		for f in func_list:
-			s = timer()
-			f(sheet)
-			print "{} completed in {}s".format(f.__name__, timer() - s)
+    def do_front_page_analysis(self):
+        func_list = [self.create_node_statistics,
+                     self.create_edge_statistics,
+                     self.create_qa_statistics,
+                     self.create_highvalue_list]
+        sheet = self.workbook._sheets[0]
+        self.write_single_cell(sheet, 1, 1, "Node Statistics")
+        self.write_single_cell(sheet, 1, 2, "Edge Statistics")
+        self.write_single_cell(sheet, 1, 3, "QA Info")
+        font = styles.Font(bold=True)
+        sheet.cell(1, 1).font = font
+        sheet.cell(1, 2).font = font
+        sheet.cell(1, 3).font = font
 
-	def create_node_statistics(self, sheet):
-		session = self.driver.session()
-		for result in session.run("MATCH (n:User {domain:{domain}}) RETURN count(n)", domain=self.domain):
-			self.write_single_cell(
-				sheet, 2, 1, "Users: {:,}".format(result[0]))
+        for f in func_list:
+            s = timer()
+            f(sheet)
+            print "{} completed in {}s".format(f.__name__, timer() - s)
 
-		for result in session.run("MATCH (n:Group {domain:{domain}}) RETURN count(n)", domain=self.domain):
-			self.write_single_cell(
-				sheet, 3, 1, "Groups: {:,}".format(result[0]))
+    def create_node_statistics(self, sheet):
+        session = self.driver.session()
+        for result in session.run("MATCH (n:User {domain:{domain}}) RETURN count(n)", domain=self.domain):
+            self.write_single_cell(
+                sheet, 2, 1, "Users: {:,}".format(result[0]))
 
-		for result in session.run("MATCH (n:Computer {domain:{domain}}) RETURN count(n)", domain=self.domain):
-			self.write_single_cell(
-				sheet, 4, 1, "Computers: {:,}".format(result[0]))
+        for result in session.run("MATCH (n:Group {domain:{domain}}) RETURN count(n)", domain=self.domain):
+            self.write_single_cell(
+                sheet, 3, 1, "Groups: {:,}".format(result[0]))
 
-		for result in session.run("MATCH (n:Domain) RETURN count(n)", domain=self.domain):
-			self.write_single_cell(
-				sheet, 5, 1, "Domains in trust: {:,}".format(result[0]-1))
+        for result in session.run("MATCH (n:Computer {domain:{domain}}) RETURN count(n)", domain=self.domain):
+            self.write_single_cell(
+                sheet, 4, 1, "Computers: {:,}".format(result[0]))
 
-		for result in session.run("MATCH (n:GPO) WHERE n.name =~ '.*"+ self.domain +"$' RETURN count(n)"):
-			self.write_single_cell(
-				sheet, 6, 1, "GPOs: {:,}".format(result[0]))
+        for result in session.run("MATCH (n:Domain) RETURN count(n)", domain=self.domain):
+            self.write_single_cell(
+                sheet, 5, 1, "Domains in trust: {:,}".format(result[0] - 1))
 
-		for result in session.run("MATCH (n:OU) WHERE n.name =~ '.*@"+ self.domain +"$' RETURN count(n)"):
-			self.write_single_cell(
-				sheet, 7, 1, "OUs: {:,}".format(result[0]))
+        for result in session.run("MATCH (n:GPO) WHERE n.name =~ '.*" + self.domain + "$' RETURN count(n)"):
+            self.write_single_cell(
+                sheet, 6, 1, "GPOs: {:,}".format(result[0]))
 
-		session.close()
+        for result in session.run("MATCH (n:OU) WHERE n.name =~ '.*@" + self.domain + "$' RETURN count(n)"):
+            self.write_single_cell(
+                sheet, 7, 1, "OUs: {:,}".format(result[0]))
 
-	def create_edge_statistics(self, sheet):
-		session = self.driver.session()
-		for result in session.run("MATCH ()-[r:MemberOf]->({domain:{domain}}) RETURN count(r)", domain=self.domain):
-			self.write_single_cell(
-				sheet, 2, 2, "MemberOf: {:,}".format(result[0]))
+        session.close()
 
-		for result in session.run("MATCH ()-[r:AdminTo]->({domain:{domain}}) RETURN count(r)", domain=self.domain):
-			self.write_single_cell(
-				sheet, 3, 2, "AdminTo: {:,}".format(result[0]))
+    def create_edge_statistics(self, sheet):
+        session = self.driver.session()
+        for result in session.run("MATCH ()-[r:MemberOf]->({domain:{domain}}) RETURN count(r)", domain=self.domain):
+            self.write_single_cell(
+                sheet, 2, 2, "MemberOf: {:,}".format(result[0]))
 
-		for result in session.run("MATCH ()-[r:HasSession]->({domain:{domain}}) RETURN count(r)", domain=self.domain):
-			self.write_single_cell(
-				sheet, 4, 2, "HasSession: {:,}".format(result[0]))
+        for result in session.run("MATCH ()-[r:AdminTo]->({domain:{domain}}) RETURN count(r)", domain=self.domain):
+            self.write_single_cell(
+                sheet, 3, 2, "AdminTo: {:,}".format(result[0]))
 
-		for result in session.run("MATCH ()-[r:GpLink]-(n) WHERE n.name =~ '.*"+ self.domain +"$' RETURN count(r)"):
-			self.write_single_cell(
-				sheet, 5, 2, "GpLinks: {:,}".format(result[0]))
+        for result in session.run("MATCH ()-[r:HasSession]->({domain:{domain}}) RETURN count(r)", domain=self.domain):
+            self.write_single_cell(
+                sheet, 4, 2, "HasSession: {:,}".format(result[0]))
 
-		for result in session.run("MATCH ()-[r {isacl:true}]->({domain:{domain}}) RETURN count(r)", domain=self.domain):
-			self.write_single_cell(
-				sheet, 6, 2, "ACLs: {:,}".format(result[0]))
-		session.close()
+        for result in session.run("MATCH ()-[r:GpLink]-(n) WHERE n.name =~ '.*" + self.domain + "$' RETURN count(r)"):
+            self.write_single_cell(
+                sheet, 5, 2, "GpLinks: {:,}".format(result[0]))
 
-	def create_qa_statistics(self, sheet):
-		session = self.driver.session()
-		query = """MATCH (n)-[:AdminTo]->(c:Computer {domain:{domain}})
+        for result in session.run("MATCH ()-[r {isacl:true}]->({domain:{domain}}) RETURN count(r)", domain=self.domain):
+            self.write_single_cell(
+                sheet, 6, 2, "ACLs: {:,}".format(result[0]))
+        session.close()
+
+    def create_qa_statistics(self, sheet):
+        session = self.driver.session()
+        query = """MATCH (n)-[:AdminTo]->(c:Computer {domain:{domain}})
 					WITH COUNT(DISTINCT(c)) as computersWithAdminsCount
 					MATCH (c2:Computer {domain:{domain}})
 					RETURN toInt(100 * (toFloat(computersWithAdminsCount) / COUNT(c2)))
 					"""
-		for result in session.run(query, domain=self.domain):
-			computer_local_admin_pct = result[0]
-		
-		query = """MATCH (c:Computer {domain:{domain}})-[:HasSession]->()
+        for result in session.run(query, domain=self.domain):
+            computer_local_admin_pct = result[0]
+
+        query = """MATCH (c:Computer {domain:{domain}})-[:HasSession]->()
 					WITH COUNT(DISTINCT(c)) as computersWithSessions
 					MATCH (c2:Computer {domain:{domain}})
 					RETURN toInt(100 * (toFloat(computersWithSessions) / COUNT(c2)))
 					"""
-		
-		for result in session.run(query, domain=self.domain):
-			computer_session_pct = result[0]
 
-		query = """MATCH ()-[:HasSession]->(u:User {domain:{domain}})
+        for result in session.run(query, domain=self.domain):
+            computer_session_pct = result[0]
+
+        query = """MATCH ()-[:HasSession]->(u:User {domain:{domain}})
 					WITH COUNT(DISTINCT(u)) as usersWithSessions
 					MATCH (u2:User {domain:{domain},enabled:true})
 					RETURN toInt(100 * (toFloat(usersWithSessions) / COUNT(u2)))
 					"""
-		
-		for result in session.run(query, domain=self.domain):
-			user_session_pct = result[0]
 
-		query = """MATCH (u:User)
+        for result in session.run(query, domain=self.domain):
+            user_session_pct = result[0]
+
+        query = """MATCH (u:User)
 					MATCH (g:Group)
 					WHERE g.objectsid ENDS WITH '-512'
 					WITH g, COUNT(u) as userCount
 					MATCH p = shortestPath((u:User)-[*1..]->(g))
 					RETURN toint(100.0 * COUNT(u) / userCount)
 					"""
-		
-		for result in session.run(query, domain=self.domain):
-			Users_to_da = result[0]
 
-		query = """MATCH (c:Computer)
+        for result in session.run(query, domain=self.domain):
+            Users_to_da = result[0]
+
+        query = """MATCH (c:Computer)
 					MATCH (g:Group)
 					WHERE g.objectsid ENDS WITH '-512'
 					WITH g, COUNT(c) as ComputerCount
 					MATCH p = shortestPath((c:Computer)-[*1..]->(g))
 					RETURN toint(100.0 * COUNT(c) / ComputerCount)
 					"""
-		
-		for result in session.run(query, domain=self.domain):
-			Computers_to_da = result[0]
-		
-		session.close()
-		self.write_single_cell(sheet, 2, 3, "Computers With Local Admin Data: {}%".format(computer_local_admin_pct))
-		self.write_single_cell(sheet, 3, 3, "Computers With Session Data: {}%".format(computer_session_pct))
-		self.write_single_cell(sheet, 4, 3, "Users With Session Data: {}%".format(user_session_pct))
-		self.write_single_cell(sheet, 5, 3, "Users with attack path to Domain Admin: {}%".format(Users_to_da))
-		self.write_single_cell(sheet, 6, 3, "Computers with attack path to Domain Admin: {}%".format(Computers_to_da))
-	
-	
-	def create_highvalue_list(self, sheet):
-        	list_query = """MATCH (n {highvalue: True}) 
-							RETURN n.name
+
+        for result in session.run(query, domain=self.domain):
+            Computers_to_da = result[0]
+
+        session.close()
+        self.write_single_cell(sheet, 2, 3, "Computers With Local Admin Data: {}%".format(
+            computer_local_admin_pct))
+        self.write_single_cell(
+            sheet, 3, 3, "Computers With Session Data: {}%".format(computer_session_pct))
+        self.write_single_cell(
+            sheet, 4, 3, "Users With Session Data: {}%".format(user_session_pct))
+        self.write_single_cell(
+            sheet, 5, 3, "Users with attack path to Domain Admin: {}%".format(Users_to_da))
+        self.write_single_cell(
+            sheet, 6, 3, "Computers with attack path to Domain Admin: {}%".format(Computers_to_da))
+
+    def create_highvalue_list(self, sheet):
+        list_query = """MATCH (n {highvalue: True})
+							RETURN DISTINCT n.name
 							ORDER BY n.name ASC
 							"""
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "High Value List: {}", results)
-
+        session.close()
+        self.write_column_data(
+            sheet, "High Value List: {}", results)
 
 
 class LowHangingFruit(object):
-	def __init__(self, driver, domain, workbook):
-		self.driver = driver
-		self.domain = domain
-		self.col_count = 1
-		self.workbook = workbook
+    def __init__(self, driver, domain, workbook):
+        self.driver = driver
+        self.domain = domain
+        self.col_count = 1
+        self.workbook = workbook
 
-	def write_column_data(self, sheet, title, results):
-		count = len(results)
-		offset = 6
-		font = styles.Font(bold=True)
-		c = sheet.cell(offset, self.col_count)
-		c.font = font
-		sheet.cell(offset, self.col_count, value=title.format(count))
-		for i in xrange(0, count):
-			sheet.cell(i+offset+1, self.col_count, value=results[i])
-		self.col_count += 1
+    def write_column_data(self, sheet, title, results):
+        count = len(results)
+        offset = 6
+        font = styles.Font(bold=True)
+        c = sheet.cell(offset, self.col_count)
+        c.font = font
+        sheet.cell(offset, self.col_count, value=title.format(count))
+        for i in xrange(0, count):
+            sheet.cell(i + offset + 1, self.col_count, value=results[i])
+        self.col_count += 1
 
-	def write_single_cell(self, sheet, row, column, text):
-		sheet.cell(row, column, value=text)
+    def write_single_cell(self, sheet, row, column, text):
+        sheet.cell(row, column, value=text)
 
-	def do_low_hanging_fruit_analysis(self):
-		func_list = [
-			self.domain_user_admin, self.everyone_admin, self.authenticated_users_admin,
-			self.domain_users_control, self.everyone_control, self.authenticated_users_control,
-			self.domain_users_rdp, self.everyone_rdp, self.authenticated_users_dcom,
-			self.domain_users_dcom, self.everyone_dcom, self.authenticated_users_dcom,
-			self.shortest_acl_path_domain_users, self.shortest_derivative_path_domain_users, self.shortest_hybrid_path_domain_users,
-			self.shortest_acl_path_everyone, self.shortest_derivative_path_everyone, self.shortest_hybrid_path_everyone,
-			self.shortest_acl_path_auth_users, self.shortest_derivative_path_auth_users, self.shortest_hybrid_path_auth_users,
-			self.kerberoastable_path_len, self.asreproastable_path_len, self.high_admin_comps, self.server_2003, self.server_2008
-		]
-		sheet = self.workbook._sheets[2]
-		self.write_single_cell(sheet, 1, 1, "Domain Users to Domain Admins")
-		self.write_single_cell(sheet, 1, 2, "Everyone to Domain Admins")
-		self.write_single_cell(sheet, 1, 3, "Authenticated Users to Domain Admins")
-		font = styles.Font(bold=True)
-		sheet.cell(1, 1).font = font
-		sheet.cell(1, 2).font = font
-		sheet.cell(1, 3).font = font
+    def do_low_hanging_fruit_analysis(self):
+        func_list = [
+            self.domain_user_admin, self.everyone_admin, self.authenticated_users_admin,
+            self.domain_users_control, self.everyone_control, self.authenticated_users_control,
+            self.domain_users_rdp, self.everyone_rdp, self.authenticated_users_dcom,
+            self.domain_users_dcom, self.everyone_dcom, self.authenticated_users_dcom,
+            self.shortest_acl_path_domain_users, self.shortest_derivative_path_domain_users, self.shortest_hybrid_path_domain_users,
+            self.shortest_acl_path_everyone, self.shortest_derivative_path_everyone, self.shortest_hybrid_path_everyone,
+            self.shortest_acl_path_auth_users, self.shortest_derivative_path_auth_users, self.shortest_hybrid_path_auth_users,
+            self.kerberoastable_path_len, self.asreproastable_path_len, self.high_admin_comps, self.server_2003, self.server_2008
+        ]
+        sheet = self.workbook._sheets[2]
+        self.write_single_cell(sheet, 1, 1, "Domain Users to Domain Admins")
+        self.write_single_cell(sheet, 1, 2, "Everyone to Domain Admins")
+        self.write_single_cell(
+            sheet, 1, 3, "Authenticated Users to Domain Admins")
+        font = styles.Font(bold=True)
+        sheet.cell(1, 1).font = font
+        sheet.cell(1, 2).font = font
+        sheet.cell(1, 3).font = font
 
-		for f in func_list:
-			s = timer()
-			f(sheet)
-			print "{} completed in {}s".format(f.__name__, timer() - s)
+        for f in func_list:
+            s = timer()
+            f(sheet)
+            print "{} completed in {}s".format(f.__name__, timer() - s)
 
-	def domain_user_admin(self, sheet):
-		list_query = """MATCH (g:Group {domain:{domain}})
+    def domain_user_admin(self, sheet):
+        list_query = """MATCH (g:Group {domain:{domain}})
 					WHERE g.objectsid ENDS WITH "-513"
 					OPTIONAL MATCH (g)-[:AdminTo]->(c1)
 					OPTIONAL MATCH (g)-[:MemberOf*1..]->(:Group)-[:AdminTo]->(c2)
@@ -248,18 +253,18 @@ class LowHangingFruit(object):
 					RETURN DISTINCT(computers.name)
 					"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Domain Users with Local Admin: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Domain Users with Local Admin: {}", results)
 
-	def everyone_admin(self, sheet):
-		list_query = """MATCH (g:Group {domain:{domain}})
+    def everyone_admin(self, sheet):
+        list_query = """MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid = "S-1-1-0"
 						OPTIONAL MATCH (g)-[:AdminTo]->(c1)
 						OPTIONAL MATCH (g)-[:MemberOf*1..]->(:Group)-[:AdminTo]->(c2)
@@ -268,18 +273,18 @@ class LowHangingFruit(object):
 						RETURN DISTINCT(computers.name)
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(sheet, "Everyone with Local Admin: {}", results)
+        session.close()
+        self.write_column_data(sheet, "Everyone with Local Admin: {}", results)
 
-	def authenticated_users_admin(self, sheet):
+    def authenticated_users_admin(self, sheet):
 
-		list_query = """MATCH (g:Group {domain:{domain}})
+        list_query = """MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid = "S-1-5-11"
 						OPTIONAL MATCH (g)-[:AdminTo]->(c1)
 						OPTIONAL MATCH (g)-[:MemberOf*1..]->(:Group)-[:AdminTo]->(c2)
@@ -288,19 +293,19 @@ class LowHangingFruit(object):
 						RETURN DISTINCT(computers.name)
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Authenticated Users with Local Admin: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Authenticated Users with Local Admin: {}", results)
 
-	def domain_users_control(self, sheet):
+    def domain_users_control(self, sheet):
 
-		list_query = """MATCH (g:Group {domain:{domain}})
+        list_query = """MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid ENDS WITH "-513"
 						OPTIONAL MATCH (g)-[{isacl:true}]->(n)
 						OPTIONAL MATCH (g)-[:MemberOf*1..]->(:Group)-[{isacl:true}]->(m)
@@ -310,19 +315,19 @@ class LowHangingFruit(object):
 						ORDER BY objects.name ASC
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Objects Controlled by Domain Users: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Objects Controlled by Domain Users: {}", results)
 
-	def everyone_control(self, sheet):
+    def everyone_control(self, sheet):
 
-		list_query = """MATCH (g:Group {domain:{domain}})
+        list_query = """MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid = 'S-1-1-0'
 						OPTIONAL MATCH (g)-[{isacl:true}]->(n)
 						OPTIONAL MATCH (g)-[:MemberOf*1..]->(:Group)-[{isacl:true}]->(m)
@@ -332,19 +337,19 @@ class LowHangingFruit(object):
 						ORDER BY objects.name ASC
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Objects Controlled by Everyone: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Objects Controlled by Everyone: {}", results)
 
-	def authenticated_users_control(self, sheet):
+    def authenticated_users_control(self, sheet):
 
-		list_query = """MATCH (g:Group {domain:{domain}})
+        list_query = """MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid = 'S-1-5-11'
 						OPTIONAL MATCH (g)-[{isacl:true}]->(n)
 						OPTIONAL MATCH (g)-[:MemberOf*1..]->(:Group)-[{isacl:true}]->(m)
@@ -354,19 +359,19 @@ class LowHangingFruit(object):
 						ORDER BY objects.name ASC
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Objects Controlled by Authenticated Users: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Objects Controlled by Authenticated Users: {}", results)
 
-	def domain_users_rdp(self, sheet):
+    def domain_users_rdp(self, sheet):
 
-		list_query = """MATCH (g:Group {domain:{domain}})
+        list_query = """MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid ENDS WITH "-513"
 						OPTIONAL MATCH (g)-[:CanRDP]->(c1)
 						OPTIONAL MATCH (g)-[:MemberOf*1..]->(:Group)-[:CanRDP]->(c2)
@@ -375,19 +380,19 @@ class LowHangingFruit(object):
 						RETURN DISTINCT(computers.name)
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Domain Users with RDP Rights: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Domain Users with RDP Rights: {}", results)
 
-	def everyone_rdp(self, sheet):
+    def everyone_rdp(self, sheet):
 
-		list_query = """MATCH (g:Group {domain:{domain}})
+        list_query = """MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid = "S-1-1-0"
 						OPTIONAL MATCH (g)-[:CanRDP]->(c1)
 						OPTIONAL MATCH (g)-[:MemberOf*1..]->(:Group)-[:CanRDP]->(c2)
@@ -396,18 +401,18 @@ class LowHangingFruit(object):
 						RETURN DISTINCT(computers.name)
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(sheet, "Everyone with RDP Rights: {}", results)
+        session.close()
+        self.write_column_data(sheet, "Everyone with RDP Rights: {}", results)
 
-	def authenticated_users_rdp(self, sheet):
+    def authenticated_users_rdp(self, sheet):
 
-		list_query = """MATCH (g:Group {domain:{domain}})
+        list_query = """MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid = "S-1-5-11"
 						OPTIONAL MATCH (g)-[:CanRDP]->(c1)
 						OPTIONAL MATCH (g)-[:MemberOf*1..]->(:Group)-[:CanRDP]->(c2)
@@ -416,19 +421,19 @@ class LowHangingFruit(object):
 						RETURN DISTINCT(computers.name)
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Authenticated Users with RDP Rights: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Authenticated Users with RDP Rights: {}", results)
 
-	def domain_users_dcom(self, sheet):
+    def domain_users_dcom(self, sheet):
 
-		list_query = """MATCH (g:Group {domain:{domain}})
+        list_query = """MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid ENDS WITH "-513"
 						OPTIONAL MATCH (g)-[:ExecuteDCOM]->(c1)
 						OPTIONAL MATCH (g)-[:MemberOf*1..]->(:Group)-[:ExecuteDCOM]->(c2)
@@ -437,19 +442,19 @@ class LowHangingFruit(object):
 						RETURN DISTINCT(computers.name)
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Domain Users with DCOM Rights: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Domain Users with DCOM Rights: {}", results)
 
-	def everyone_dcom(self, sheet):
+    def everyone_dcom(self, sheet):
 
-		list_query = """MATCH (g:Group {domain:{domain}})
+        list_query = """MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid = "S-1-1-0"
 						OPTIONAL MATCH (g)-[:ExecuteDCOM]->(c1)
 						OPTIONAL MATCH (g)-[:MemberOf*1..]->(:Group)-[:ExecuteDCOM]->(c2)
@@ -458,19 +463,19 @@ class LowHangingFruit(object):
 						RETURN DISTINCT(computers.name)
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Domain Users with DCOM Rights: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Domain Users with DCOM Rights: {}", results)
 
-	def authenticated_users_dcom(self, sheet):
+    def authenticated_users_dcom(self, sheet):
 
-		list_query = """MATCH (g:Group {domain:{domain}})
+        list_query = """MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid = "S-1-5-11"
 						OPTIONAL MATCH (g)-[:ExecuteDCOM]->(c1)
 						OPTIONAL MATCH (g)-[:MemberOf*1..]->(:Group)-[:ExecuteDCOM]->(c2)
@@ -479,18 +484,18 @@ class LowHangingFruit(object):
 						RETURN DISTINCT(computers.name)
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Domain Users with DCOM Rights: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Domain Users with DCOM Rights: {}", results)
 
-	def shortest_acl_path_domain_users(self, sheet):
-		count_query = """MATCH (g1:Group {domain:{domain}})
+    def shortest_acl_path_domain_users(self, sheet):
+        count_query = """MATCH (g1:Group {domain:{domain}})
 						WHERE g1.objectsid ENDS WITH "-513"
 						MATCH (g2:Group {domain:{domain}})
 						WHERE g2.objectsid ENDS WITH "-512"
@@ -498,17 +503,17 @@ class LowHangingFruit(object):
 						RETURN LENGTH(p)
 						"""
 
-		session = self.driver.session()
-		count = 0
-		for result in session.run(count_query, domain=self.domain):
-			count = result[0]
+        session = self.driver.session()
+        count = 0
+        for result in session.run(count_query, domain=self.domain):
+            count = result[0]
 
-		session.close()
-		self.write_single_cell(
-			sheet, 2, 1, "Shortest ACL Path Length: {}".format(count))
+        session.close()
+        self.write_single_cell(
+            sheet, 2, 1, "Shortest ACL Path Length: {}".format(count))
 
-	def shortest_derivative_path_domain_users(self, sheet):
-		count_query = """MATCH (g1:Group {domain:{domain}})
+    def shortest_derivative_path_domain_users(self, sheet):
+        count_query = """MATCH (g1:Group {domain:{domain}})
 						WHERE g1.objectsid ENDS WITH "-513"
 						MATCH (g2:Group {domain:{domain}})
 						WHERE g2.objectsid ENDS WITH "-512"
@@ -516,17 +521,17 @@ class LowHangingFruit(object):
 						RETURN LENGTH(p)
 						"""
 
-		session = self.driver.session()
-		count = 0
-		for result in session.run(count_query, domain=self.domain):
-			count = result[0]
+        session = self.driver.session()
+        count = 0
+        for result in session.run(count_query, domain=self.domain):
+            count = result[0]
 
-		session.close()
-		self.write_single_cell(
-			sheet, 3, 1, "Shortest Derivative Path Length: {}".format(count))
+        session.close()
+        self.write_single_cell(
+            sheet, 3, 1, "Shortest Derivative Path Length: {}".format(count))
 
-	def shortest_hybrid_path_domain_users(self, sheet):
-		count_query = """MATCH (g1:Group {domain:{domain}})
+    def shortest_hybrid_path_domain_users(self, sheet):
+        count_query = """MATCH (g1:Group {domain:{domain}})
 						WHERE g1.objectsid ENDS WITH "-513"
 						MATCH (g2:Group {domain:{domain}})
 						WHERE g2.objectsid ENDS WITH "-512"
@@ -537,17 +542,17 @@ class LowHangingFruit(object):
 						RETURN LENGTH(p)
 						"""
 
-		session = self.driver.session()
-		count = 0
-		for result in session.run(count_query, domain=self.domain):
-			count = result[0]
+        session = self.driver.session()
+        count = 0
+        for result in session.run(count_query, domain=self.domain):
+            count = result[0]
 
-		session.close()
-		self.write_single_cell(
-			sheet, 4, 1, "Shortest Hybrid Path Length: {}".format(count))
+        session.close()
+        self.write_single_cell(
+            sheet, 4, 1, "Shortest Hybrid Path Length: {}".format(count))
 
-	def shortest_acl_path_everyone(self, sheet):
-		count_query = """MATCH (g1:Group {domain:{domain}})
+    def shortest_acl_path_everyone(self, sheet):
+        count_query = """MATCH (g1:Group {domain:{domain}})
 						WHERE g1.objectsid = 'S-1-1-0'
 						MATCH (g2:Group {domain:{domain}})
 						WHERE g2.objectsid ENDS WITH "-512"
@@ -555,17 +560,17 @@ class LowHangingFruit(object):
 						RETURN LENGTH(p)
 						"""
 
-		session = self.driver.session()
-		count = 0
-		for result in session.run(count_query, domain=self.domain):
-			count = result[0]
+        session = self.driver.session()
+        count = 0
+        for result in session.run(count_query, domain=self.domain):
+            count = result[0]
 
-		session.close()
-		self.write_single_cell(
-			sheet, 2, 2, "Shortest ACL Path Length: {}".format(count))
+        session.close()
+        self.write_single_cell(
+            sheet, 2, 2, "Shortest ACL Path Length: {}".format(count))
 
-	def shortest_derivative_path_everyone(self, sheet):
-		count_query = """MATCH (g1:Group {domain:{domain}})
+    def shortest_derivative_path_everyone(self, sheet):
+        count_query = """MATCH (g1:Group {domain:{domain}})
 						WHERE g1.objectsid = 'S-1-1-0'
 						MATCH (g2:Group {domain:{domain}})
 						WHERE g2.objectsid ENDS WITH "-512"
@@ -573,17 +578,17 @@ class LowHangingFruit(object):
 						RETURN LENGTH(p)
 						"""
 
-		session = self.driver.session()
-		count = 0
-		for result in session.run(count_query, domain=self.domain):
-			count = result[0]
+        session = self.driver.session()
+        count = 0
+        for result in session.run(count_query, domain=self.domain):
+            count = result[0]
 
-		session.close()
-		self.write_single_cell(
-			sheet, 3, 2, "Shortest Derivative Path Length: {}".format(count))
+        session.close()
+        self.write_single_cell(
+            sheet, 3, 2, "Shortest Derivative Path Length: {}".format(count))
 
-	def shortest_hybrid_path_everyone(self, sheet):
-		count_query = """MATCH (g1:Group {domain:{domain}})
+    def shortest_hybrid_path_everyone(self, sheet):
+        count_query = """MATCH (g1:Group {domain:{domain}})
 						WHERE g1.objectsid = 'S-1-1-0'
 						MATCH (g2:Group {domain:{domain}})
 						WHERE g2.objectsid ENDS WITH "-512"
@@ -594,17 +599,17 @@ class LowHangingFruit(object):
 						RETURN LENGTH(p)
 						"""
 
-		session = self.driver.session()
-		count = 0
-		for result in session.run(count_query, domain=self.domain):
-			count = result[0]
+        session = self.driver.session()
+        count = 0
+        for result in session.run(count_query, domain=self.domain):
+            count = result[0]
 
-		session.close()
-		self.write_single_cell(
-			sheet, 4, 2, "Shortest Hybrid Path Length: {}".format(count))
+        session.close()
+        self.write_single_cell(
+            sheet, 4, 2, "Shortest Hybrid Path Length: {}".format(count))
 
-	def shortest_acl_path_auth_users(self, sheet):
-		count_query = """MATCH (g1:Group {domain:{domain}})
+    def shortest_acl_path_auth_users(self, sheet):
+        count_query = """MATCH (g1:Group {domain:{domain}})
 						WHERE g1.objectsid = 'S-1-5-11'
 						MATCH (g2:Group {domain:{domain}})
 						WHERE g2.objectsid ENDS WITH "-512"
@@ -612,17 +617,17 @@ class LowHangingFruit(object):
 						RETURN LENGTH(p)
 						"""
 
-		session = self.driver.session()
-		count = 0
-		for result in session.run(count_query, domain=self.domain):
-			count = result[0]
+        session = self.driver.session()
+        count = 0
+        for result in session.run(count_query, domain=self.domain):
+            count = result[0]
 
-		session.close()
-		self.write_single_cell(
-			sheet, 2, 3, "Shortest ACL Path Length: {}".format(count))
+        session.close()
+        self.write_single_cell(
+            sheet, 2, 3, "Shortest ACL Path Length: {}".format(count))
 
-	def shortest_derivative_path_auth_users(self, sheet):
-		count_query = """MATCH (g1:Group {domain:{domain}})
+    def shortest_derivative_path_auth_users(self, sheet):
+        count_query = """MATCH (g1:Group {domain:{domain}})
 						WHERE g1.objectsid = 'S-1-5-11'
 						MATCH (g2:Group {domain:{domain}})
 						WHERE g2.objectsid ENDS WITH "-512"
@@ -630,17 +635,17 @@ class LowHangingFruit(object):
 						RETURN LENGTH(p)
 						"""
 
-		session = self.driver.session()
-		count = 0
-		for result in session.run(count_query, domain=self.domain):
-			count = result[0]
+        session = self.driver.session()
+        count = 0
+        for result in session.run(count_query, domain=self.domain):
+            count = result[0]
 
-		session.close()
-		self.write_single_cell(
-			sheet, 3, 3, "Shortest Derivative Path Length: {}".format(count))
+        session.close()
+        self.write_single_cell(
+            sheet, 3, 3, "Shortest Derivative Path Length: {}".format(count))
 
-	def shortest_hybrid_path_auth_users(self, sheet):
-		count_query = """MATCH (g1:Group {domain:{domain}})
+    def shortest_hybrid_path_auth_users(self, sheet):
+        count_query = """MATCH (g1:Group {domain:{domain}})
 						WHERE g1.objectsid = 'S-1-5-11'
 						MATCH (g2:Group {domain:{domain}})
 						WHERE g2.objectsid ENDS WITH "-512"
@@ -651,17 +656,17 @@ class LowHangingFruit(object):
 						RETURN LENGTH(p)
 						"""
 
-		session = self.driver.session()
-		count = 0
-		for result in session.run(count_query, domain=self.domain):
-			count = result[0]
+        session = self.driver.session()
+        count = 0
+        for result in session.run(count_query, domain=self.domain):
+            count = result[0]
 
-		session.close()
-		self.write_single_cell(
-			sheet, 4, 3, "Shortest Hybrid Path Length: {}".format(count))
+        session.close()
+        self.write_single_cell(
+            sheet, 4, 3, "Shortest Hybrid Path Length: {}".format(count))
 
-	def kerberoastable_path_len(self, sheet):
-		list_query = """MATCH (u:User {domain:{domain},hasspn:true})
+    def kerberoastable_path_len(self, sheet):
+        list_query = """MATCH (u:User {domain:{domain},hasspn:true})
 						MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid ENDS WITH "-512" AND NOT u.name STARTS WITH "KRBTGT@"
 						MATCH p = shortestPath((u)-[*1..]->(g))
@@ -669,18 +674,18 @@ class LowHangingFruit(object):
 						ORDER BY LENGTH(p) ASC
 						"""
 
-		session = self.driver.session()
-		results = []
-		for result in session.run(list_query, domain=self.domain):
-			results.append(
-				"{} - {}".format(result[0], result[1]))
+        session = self.driver.session()
+        results = []
+        for result in session.run(list_query, domain=self.domain):
+            results.append(
+                "{} - {}".format(result[0], result[1]))
 
-		session.close()
-		self.write_column_data(
-			sheet, "Kerberoastable User to DA Path Length", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Kerberoastable User to DA Path Length", results)
 
-	def asreproastable_path_len(self, sheet):
-		list_query = """MATCH (u:User {domain:{domain},dontreqpreauth:True})
+    def asreproastable_path_len(self, sheet):
+        list_query = """MATCH (u:User {domain:{domain},dontreqpreauth:True})
 						MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid ENDS WITH "-512" AND NOT u.name STARTS WITH "KRBTGT@"
 						MATCH p = shortestPath((u)-[*1..]->(g))
@@ -688,18 +693,18 @@ class LowHangingFruit(object):
 						ORDER BY LENGTH(p) ASC
 						"""
 
-		session = self.driver.session()
-		results = []
-		for result in session.run(list_query, domain=self.domain):
-			results.append(
-				"{} - {}".format(result[0], result[1]))
+        session = self.driver.session()
+        results = []
+        for result in session.run(list_query, domain=self.domain):
+            results.append(
+                "{} - {}".format(result[0], result[1]))
 
-		session.close()
-		self.write_column_data(
-			sheet, "ASReproastable User to DA Path Length", results)
-	
-	def high_admin_comps(self, sheet):
-		list_query = """MATCH (c:Computer {domain:{domain}})
+        session.close()
+        self.write_column_data(
+            sheet, "ASReproastable User to DA Path Length", results)
+
+    def high_admin_comps(self, sheet):
+        list_query = """MATCH (c:Computer {domain:{domain}})
 						OPTIONAL MATCH (n)-[:AdminTo]->(c)
 						OPTIONAL MATCH (m)-[:MemberOf*1..]->(:Group)-[:AdminTo]->(c)
 						WITH COLLECT(n) + COLLECT(m) as tempVar,c
@@ -708,96 +713,96 @@ class LowHangingFruit(object):
 						ORDER BY COUNT(DISTINCT(admins)) DESC
 						"""
 
-		session = self.driver.session()
-		results = []
-		for result in session.run(list_query, domain=self.domain):
-			count = result[1]
-			if (count > 1000):
-				results.append(
-					"{} - {}".format(result[0], count))
+        session = self.driver.session()
+        results = []
+        for result in session.run(list_query, domain=self.domain):
+            count = result[1]
+            if (count > 1000):
+                results.append(
+                    "{} - {}".format(result[0], count))
 
-		session.close()
-		self.write_column_data(
-			sheet, "Computers with > 1000 Admins: {}", results)
-	
-	def server_2003(self, sheet):
-    		list_query = """MATCH (n:Computer {enabled: True,domain:{domain}}) 
-							WHERE n.operatingsystem =~ "Windows Server 2003.*" 
+        session.close()
+        self.write_column_data(
+            sheet, "Computers with > 1000 Admins: {}", results)
+
+    def server_2003(self, sheet):
+        list_query = """MATCH (n:Computer {enabled: True,domain:{domain}})
+							WHERE n.operatingsystem =~ "Windows Server 2003.*"
 							RETURN n.name
 							"""
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Windows Server 2003: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Windows Server 2003: {}", results)
 
-	def server_2008(self, sheet):
-    		list_query = """MATCH (n:Computer {enabled: True,domain:{domain}}) 
-							WHERE n.operatingsystem =~ "Windows Server 2008.*" 
+    def server_2008(self, sheet):
+        list_query = """MATCH (n:Computer {enabled: True,domain:{domain}})
+							WHERE n.operatingsystem =~ "Windows Server 2008.*"
 							RETURN n.name
 							"""
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Windows Server 2008(Expire 2020): {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Windows Server 2008(Expire 2020): {}", results)
 
 
 class CriticalAssets(object):
-	def __init__(self, driver, domain, workbook):
-		self.driver = driver
-		self.domain = domain
-		self.col_count = 1
-		self.workbook = workbook
+    def __init__(self, driver, domain, workbook):
+        self.driver = driver
+        self.domain = domain
+        self.col_count = 1
+        self.workbook = workbook
 
-	def write_column_data(self, sheet, title, results):
-		count = len(results)
-		offset = 1
-		font = styles.Font(bold=True)
-		c = sheet.cell(offset, self.col_count)
-		c.font = font
-		sheet.cell(offset, self.col_count, value=title.format(count))
-		for i in xrange(0, count):
-			sheet.cell(i+offset+1, self.col_count, value=results[i])
-		self.col_count += 1
+    def write_column_data(self, sheet, title, results):
+        count = len(results)
+        offset = 1
+        font = styles.Font(bold=True)
+        c = sheet.cell(offset, self.col_count)
+        c.font = font
+        sheet.cell(offset, self.col_count, value=title.format(count))
+        for i in xrange(0, count):
+            sheet.cell(i + offset + 1, self.col_count, value=results[i])
+        self.col_count += 1
 
-	def do_critical_asset_analysis(self):
-		func_list = [
-			self.admins_on_dc, self.rdp_on_dc, self.gpo_on_dc, self.admin_on_exch,
-			self.rdp_on_exch, self.gpo_on_exch, self.da_controllers, self.da_sessions,
-			self.gpo_on_da, self.da_equiv_controllers, self.da_equiv_sessions, self.gpo_on_da_equiv,
-			self.acl_domain]
-		sheet = self.workbook._sheets[1]
-		for f in func_list:
-			s = timer()
-			f(sheet)
-			print "{} completed in {}s".format(f.__name__, timer() - s)
-	
-	def acl_domain(self, sheet):
-    		list_query = """MATCH (n)-[r]->(u:Domain {name: {domain}}) 
-							WHERE r.isacl=true 
+    def do_critical_asset_analysis(self):
+        func_list = [
+            self.admins_on_dc, self.rdp_on_dc, self.gpo_on_dc, self.admin_on_exch,
+            self.rdp_on_exch, self.gpo_on_exch, self.da_controllers, self.da_sessions,
+            self.gpo_on_da, self.da_equiv_controllers, self.da_equiv_sessions, self.gpo_on_da_equiv,
+            self.acl_domain]
+        sheet = self.workbook._sheets[1]
+        for f in func_list:
+            s = timer()
+            f(sheet)
+            print "{} completed in {}s".format(f.__name__, timer() - s)
+
+    def acl_domain(self, sheet):
+        list_query = """MATCH (n)-[r]->(u:Domain {name: {domain}})
+							WHERE r.isacl=true
 							RETURN DISTINCT  n.name
 							"""
-		session = self.driver.session()
-		results = []
-		
-		for result in session.run(list_query, domain=self.domain):
-    			results.append(result[0])		
+        session = self.driver.session()
+        results = []
 
-		session.close()
-		self.write_column_data(
-			sheet, "Explicit ACL privileges on domain: {}", results)
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-	def admins_on_dc(self, sheet):
-		list_query = """MATCH (g:Group {domain:{domain}})
+        session.close()
+        self.write_column_data(
+            sheet, "Explicit ACL privileges on domain: {}", results)
+
+    def admins_on_dc(self, sheet):
+        list_query = """MATCH (g:Group {domain:{domain}})
 					WHERE g.objectsid ENDS WITH "-516"
 					MATCH (c:Computer)-[:MemberOf*1..]->(g)
 					OPTIONAL MATCH (n)-[:AdminTo]->(c)
@@ -809,18 +814,18 @@ class CriticalAssets(object):
 					RETURN tempVar3.name
 					ORDER BY tempVar3.name ASC"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Admins on Domain Controllers: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Admins on Domain Controllers: {}", results)
 
-	def rdp_on_dc(self, sheet):
-		list_query = """MATCH (g:Group {domain:{domain}})
+    def rdp_on_dc(self, sheet):
+        list_query = """MATCH (g:Group {domain:{domain}})
 					WHERE g.objectsid ENDS WITH "-516"
 					MATCH (c:Computer)-[:MemberOf*1..]->(g)
 					OPTIONAL MATCH (n)-[:CanRDP]->(c)
@@ -832,18 +837,18 @@ class CriticalAssets(object):
 					RETURN tempVar3.name
 					ORDER BY tempVar3.name ASC
 					"""
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "RDPers on Domain Controllers: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "RDPers on Domain Controllers: {}", results)
 
-	def gpo_on_dc(self, sheet):
-		list_query = """MATCH (g:Group {domain:{domain}})
+    def gpo_on_dc(self, sheet):
+        list_query = """MATCH (g:Group {domain:{domain}})
 						WHERE g.objectsid ENDS WITH "-516"
 						MATCH (c:Computer)-[:MemberOf*1..]->(g)
 						OPTIONAL MATCH p1 = (g1:GPO)-[r1:GpLink {enforced:true}]->(container1)-[r2:Contains*1..]->(c)
@@ -860,19 +865,19 @@ class CriticalAssets(object):
 						ORDER BY tempVar2.name ASC
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Domain Controller GPO Controllers: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Domain Controller GPO Controllers: {}", results)
 
-	def admin_on_exch(self, sheet):
-		list_query = """MATCH (n:Computer)
-						UNWIND n.serviceprincipalnames AS spn 
+    def admin_on_exch(self, sheet):
+        list_query = """MATCH (n:Computer)
+						UNWIND n.serviceprincipalnames AS spn
 						MATCH (n) WHERE TOUPPER(spn) CONTAINS "EXCHANGEMDB"
 						WITH n as c
 						MATCH (c)-[:MemberOf*1..]->(g:Group {domain:{domain}})
@@ -884,19 +889,19 @@ class CriticalAssets(object):
 						RETURN DISTINCT(exchangeAdmins.name)
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Admins on Exchange Servers: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Admins on Exchange Servers: {}", results)
 
-	def rdp_on_exch(self, sheet):
-		list_query = """MATCH (n:Computer)
-						UNWIND n.serviceprincipalnames AS spn 
+    def rdp_on_exch(self, sheet):
+        list_query = """MATCH (n:Computer)
+						UNWIND n.serviceprincipalnames AS spn
 						MATCH (n) WHERE TOUPPER(spn) CONTAINS "EXCHANGEMDB"
 						WITH n as c
 						MATCH (c)-[:MemberOf*1..]->(g:Group {domain:{domain}})
@@ -908,19 +913,19 @@ class CriticalAssets(object):
 						RETURN DISTINCT(exchangeAdmins.name)
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "RDPers on Exchange Servers: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "RDPers on Exchange Servers: {}", results)
 
-	def gpo_on_exch(self, sheet):
-		list_query = """MATCH (n:Computer)
-						UNWIND n.serviceprincipalnames AS spn 
+    def gpo_on_exch(self, sheet):
+        list_query = """MATCH (n:Computer)
+						UNWIND n.serviceprincipalnames AS spn
 						MATCH (n) WHERE TOUPPER(spn) CONTAINS "EXCHANGEMDB"
 						WITH n as c
 						MATCH (c)-[:MemberOf*1..]->(g:Group {domain:{domain}})
@@ -939,18 +944,18 @@ class CriticalAssets(object):
 						ORDER BY tempVar2.name ASC
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Exchange Server GPO Controllers: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Exchange Server GPO Controllers: {}", results)
 
-	def da_controllers(self, sheet):
-		list_query = """MATCH (DAUser)-[:MemberOf*1..]->(g:Group {domain:{domain}})
+    def da_controllers(self, sheet):
+        list_query = """MATCH (DAUser)-[:MemberOf*1..]->(g:Group {domain:{domain}})
 						WHERE g.objectsid ENDS WITH "-512"
 						OPTIONAL MATCH (n)-[{isacl:true}]->(DAUser)
 						OPTIONAL MATCH (m)-[:MemberOf*1..]->(:Group)-[{isacl:true}]->(DAUser)
@@ -960,35 +965,35 @@ class CriticalAssets(object):
 						ORDER BY DAControllers.name ASC
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Domain Admin Controllers: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Domain Admin Controllers: {}", results)
 
-	def da_sessions(self, sheet):
-		list_query = """MATCH (c:Computer)-[:HasSession]->()-[:MemberOf*1..]->(g:Group {domain:{domain}})
+    def da_sessions(self, sheet):
+        list_query = """MATCH (c:Computer)-[:HasSession]->()-[:MemberOf*1..]->(g:Group {domain:{domain}})
 						WHERE g.objectsid ENDS WITH "-512"
 						RETURN DISTINCT(c.name)
 						ORDER BY c.name ASC
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Computers with DA Sessions: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Computers with DA Sessions: {}", results)
 
-	def gpo_on_da(self, sheet):
-		list_query = """MATCH (DAUser)-[:MemberOf*1..]->(g:Group {domain:{domain}})
+    def gpo_on_da(self, sheet):
+        list_query = """MATCH (DAUser)-[:MemberOf*1..]->(g:Group {domain:{domain}})
 						WHERE g.objectsid ENDS WITH "-512"
 						OPTIONAL MATCH p1 = (g1:GPO)-[r1:GpLink {enforced:true}]->(container1)-[r2:Contains*1..]->(DAUser)
 						OPTIONAL MATCH p2 = (g2:GPO)-[r3:GpLink {enforced:false}]->(container2)-[r4:Contains*1..]->(DAUser)
@@ -1003,18 +1008,18 @@ class CriticalAssets(object):
 						RETURN DISTINCT(tempVar2.name)
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Domain Admin GPO Controllers: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Domain Admin GPO Controllers: {}", results)
 
-	def da_equiv_controllers(self, sheet):
-		list_query = """MATCH (u:User)-[:MemberOf*1..]->(g:Group {domain:{domain},highvalue:true})
+    def da_equiv_controllers(self, sheet):
+        list_query = """MATCH (u:User)-[:MemberOf*1..]->(g:Group {domain:{domain},highvalue:true})
 						OPTIONAL MATCH (n)-[{isacl:true}]->(u)
 						OPTIONAL MATCH (m)-[:MemberOf*1..]->(:Group)-[{isacl:true}]->(u)
 						WITH COLLECT(n) + COLLECT(m) as tempVar
@@ -1023,34 +1028,34 @@ class CriticalAssets(object):
 						ORDER BY highValueControllers.name ASC
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "High Value Object Controllers: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "High Value Object Controllers: {}", results)
 
-	def da_equiv_sessions(self, sheet):
-		list_query = """MATCH (c:Computer)-[:HasSession]->(u:User)-[:MemberOf*1..]->(g:Group {domain:{domain},highvalue:true})
+    def da_equiv_sessions(self, sheet):
+        list_query = """MATCH (c:Computer)-[:HasSession]->(u:User)-[:MemberOf*1..]->(g:Group {domain:{domain},highvalue:true})
 						RETURN DISTINCT(c.name)
 						ORDER BY c.name ASC
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "High Value User Sessions: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "High Value User Sessions: {}", results)
 
-	def gpo_on_da_equiv(self, sheet):
-		list_query = """MATCH (u:User)-[:MemberOf*1..]->(g:Group {domain:{domain},highvalue:true})
+    def gpo_on_da_equiv(self, sheet):
+        list_query = """MATCH (u:User)-[:MemberOf*1..]->(g:Group {domain:{domain},highvalue:true})
 						OPTIONAL MATCH p1 = (g1:GPO)-[r1:GpLink {enforced:true}]->(container1)-[r2:Contains*1..]->(u)
 						OPTIONAL MATCH p2 = (g2:GPO)-[r3:GpLink {enforced:false}]->(container2)-[r4:Contains*1..]->(u)
 						WHERE NONE (x in NODES(p2) WHERE x.blocksinheritance = true AND x:OU AND NOT (g2)-->(x))
@@ -1065,51 +1070,52 @@ class CriticalAssets(object):
 						ORDER BY tempVar2.name ASC
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "High Value User GPO Controllers: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "High Value User GPO Controllers: {}", results)
+
 
 class CrossDomain(object):
-	def __init__(self, driver, domain, workbook):
-		self.driver = driver
-		self.domain = domain
-		self.col_count = 1
-		self.workbook = workbook
-	
-	def write_column_data(self, sheet, title, results):
-		count = len(results)
-		offset = 1
-		font = styles.Font(bold=True)
-		c = sheet.cell(offset, self.col_count)
-		c.font = font
-		sheet.cell(offset, self.col_count, value=title.format(count))
-		for i in xrange(0, count):
-			sheet.cell(i+offset+1, self.col_count, value=results[i])
-		self.col_count += 1
+    def __init__(self, driver, domain, workbook):
+        self.driver = driver
+        self.domain = domain
+        self.col_count = 1
+        self.workbook = workbook
 
-	def write_single_cell(self, sheet, row, column, text):
-		sheet.cell(row, column, value=text)
-	
-	def do_cross_domain_analysis(self):
-		func_list = [
-			self.foreign_admins, self.foreign_gpo_controllers, self.foreign_user_controllers,
-			self.foreign_session
-		]
-		sheet = self.workbook._sheets[3]
+    def write_column_data(self, sheet, title, results):
+        count = len(results)
+        offset = 1
+        font = styles.Font(bold=True)
+        c = sheet.cell(offset, self.col_count)
+        c.font = font
+        sheet.cell(offset, self.col_count, value=title.format(count))
+        for i in xrange(0, count):
+            sheet.cell(i + offset + 1, self.col_count, value=results[i])
+        self.col_count += 1
 
-		for f in func_list:
-			s = timer()
-			f(sheet)
-			print "{} completed in {}s".format(f.__name__, timer() - s)
-	
-	def foreign_admins(self, sheet):
-		list_query = """MATCH (c:Computer {domain:{domain}})
+    def write_single_cell(self, sheet, row, column, text):
+        sheet.cell(row, column, value=text)
+
+    def do_cross_domain_analysis(self):
+        func_list = [
+            self.foreign_admins, self.foreign_gpo_controllers, self.foreign_user_controllers,
+            self.foreign_session
+        ]
+        sheet = self.workbook._sheets[3]
+
+        for f in func_list:
+            s = timer()
+            f(sheet)
+            print "{} completed in {}s".format(f.__name__, timer() - s)
+
+    def foreign_admins(self, sheet):
+        list_query = """MATCH (c:Computer {domain:{domain}})
 						OPTIONAL MATCH (n)-[:AdminTo]->(c)
 						WHERE (n:User OR n:Computer) AND NOT n.domain = c.domain
 						OPTIONAL MATCH (m)-[:MemberOf*1..]->(:Group)-[:AdminTo]->(c)
@@ -1120,18 +1126,18 @@ class CrossDomain(object):
 						ORDER BY COUNT(DISTINCT(foreignAdmins)) DESC
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append("{} - {}".format(result[0], result[1]))
+        for result in session.run(list_query, domain=self.domain):
+            results.append("{} - {}".format(result[0], result[1]))
 
-		session.close()
-		self.write_column_data(
-			sheet, "Computers with Foreign Admins: {}", results)
-	
-	def foreign_gpo_controllers(self, sheet):
-		list_query = """MATCH (g:GPO)
+        session.close()
+        self.write_column_data(
+            sheet, "Computers with Foreign Admins: {}", results)
+
+    def foreign_gpo_controllers(self, sheet):
+        list_query = """MATCH (g:GPO)
 						WHERE SPLIT(g.name,'@')[1] = {domain}
 						OPTIONAL MATCH (n)-[{isacl:true}]->(g)
 						WHERE (n:User OR n:Computer) AND NOT n.domain = {domain}
@@ -1143,18 +1149,18 @@ class CrossDomain(object):
 						ORDER BY COUNT(DISTINCT(foreignGPOControllers)) DESC
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append("{} - {}".format(result[0], result[1]))
+        for result in session.run(list_query, domain=self.domain):
+            results.append("{} - {}".format(result[0], result[1]))
 
-		session.close()
-		self.write_column_data(
-			sheet, "GPOs with Foreign Controllers: {}", results)
-	
-	def foreign_user_controllers(self, sheet):
-    		list_query = """MATCH (g:Group {domain:{domain}})
+        session.close()
+        self.write_column_data(
+            sheet, "GPOs with Foreign Controllers: {}", results)
+
+    def foreign_user_controllers(self, sheet):
+        list_query = """MATCH (g:Group {domain:{domain}})
 							OPTIONAL MATCH (n)-[{isacl:true}]->(g)
 							WHERE (n:User OR n:Computer) AND NOT n.domain = g.domain
 							OPTIONAL MATCH (m)-[:MemberOf*1..]->(:Group)-[{isacl:true}]->(g)
@@ -1165,99 +1171,100 @@ class CrossDomain(object):
 							ORDER BY COUNT(DISTINCT(foreignGroupControllers)) DESC
 							"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Groups with Foreign Controllers: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Groups with Foreign Controllers: {}", results)
 
-	def foreign_session(self, sheet):
-		list_query = """MATCH ((s:Computer {domain:{domain}})-[r:HasSession*1]->(t:User)) 
+    def foreign_session(self, sheet):
+        list_query = """MATCH ((s:Computer {domain:{domain}})-[r:HasSession*1]->(t:User))
 						WHERE NOT s.domain = t.domain
 						RETURN s.name
 						"""
 
-		session = self.driver.session()
-		results = []
+        session = self.driver.session()
+        results = []
 
-		for result in session.run(list_query, domain=self.domain):
-			results.append(result[0])
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-		session.close()
-		self.write_column_data(
-			sheet, "Computers with Foreign Session: {}", results)
+        session.close()
+        self.write_column_data(
+            sheet, "Computers with Foreign Session: {}", results)
+
 
 class Privileges(object):
-    	def __init__(self, driver, domain, workbook):
-		self.driver = driver
-		self.domain = domain
-		self.col_count = 1
-		self.workbook = workbook
-	
-	def write_column_data(self, sheet, title, results):
-		count = len(results)
-		offset = 1
-		font = styles.Font(bold=True)
-		c = sheet.cell(offset, self.col_count)
-		c.font = font
-		sheet.cell(offset, self.col_count, value=title.format(count))
-		for i in xrange(0, count):
-			sheet.cell(i+offset+1, self.col_count, value=results[i])
-		self.col_count += 1
+    def __init__(self, driver, domain, workbook):
+        self.driver = driver
+        self.domain = domain
+        self.col_count = 1
+        self.workbook = workbook
 
-	def write_single_cell(self, sheet, row, column, text):
-		sheet.cell(row, column, value=text)
-	
-	def do_high_privileges(self):
-		func_list = [
-			self.da_members, self.high_value_members, self.local_admin_outbound, 
-			self.local_admin_inbound, self.most_session_user, self.most_session_computer
-		]
-		sheet = self.workbook._sheets[4]
+    def write_column_data(self, sheet, title, results):
+        count = len(results)
+        offset = 1
+        font = styles.Font(bold=True)
+        c = sheet.cell(offset, self.col_count)
+        c.font = font
+        sheet.cell(offset, self.col_count, value=title.format(count))
+        for i in xrange(0, count):
+            sheet.cell(i + offset + 1, self.col_count, value=results[i])
+        self.col_count += 1
 
-		for f in func_list:
-			s = timer()
-			f(sheet)
-			print "{} completed in {}s".format(f.__name__, timer() - s)
-		
-	def da_members(self, sheet):
-    		list_query = """MATCH (n:Group {domain:{domain}}) 
+    def write_single_cell(self, sheet, row, column, text):
+        sheet.cell(row, column, value=text)
+
+    def do_high_privileges(self):
+        func_list = [
+            self.da_members, self.high_value_members, self.local_admin_outbound,
+            self.local_admin_inbound, self.most_session_user, self.most_session_computer
+        ]
+        sheet = self.workbook._sheets[4]
+
+        for f in func_list:
+            s = timer()
+            f(sheet)
+            print "{} completed in {}s".format(f.__name__, timer() - s)
+
+    def da_members(self, sheet):
+        list_query = """MATCH (n:Group {domain:{domain}})
 							WHERE n.objectsid =~ "(?i)S-1-5.*-512" WITH n MATCH
-							(n)<-[r:MemberOf*1..]-(m) 
+							(n)<-[r:MemberOf*1..]-(m)
 							RETURN m.name
 							ORDER BY m.name ASC
 							"""
-		session = self.driver.session()
-		results = []
-		
-		for result in session.run(list_query, domain=self.domain):
-    			results.append(result[0])		
+        session = self.driver.session()
+        results = []
 
-		session.close()
-		self.write_column_data(
-			sheet, "Domain Admin members: {}", results)
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-	def high_value_members(self, sheet):
-		list_query = """MATCH (n)-[:MemberOf*1..]->(g {highvalue: True}) 
+        session.close()
+        self.write_column_data(
+            sheet, "Domain Admin members: {}", results)
+
+    def high_value_members(self, sheet):
+        list_query = """MATCH (n)-[:MemberOf*1..]->(g {highvalue: True})
 						RETURN DISTINCT n.name
 						ORDER BY n.name ASC
 						"""
-		session = self.driver.session()
-		results = []
-		
-		for result in session.run(list_query, domain=self.domain):
-    			results.append(result[0])		
+        session = self.driver.session()
+        results = []
 
-		session.close()
-		self.write_column_data(
-			sheet, "High Value Group members: {}", results)
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
 
-	def local_admin_outbound(self, sheet):
-    		list_query = """MATCH (u:User {domain:{domain}})
+        session.close()
+        self.write_column_data(
+            sheet, "High Value Group members: {}", results)
+
+    def local_admin_outbound(self, sheet):
+        list_query = """MATCH (u:User {domain:{domain}})
 							WITH u
 							OPTIONAL MATCH (u)-[r:AdminTo]->(c:Computer)
 							WITH u,COUNT(c) as expAdmin
@@ -1268,18 +1275,18 @@ class Privileges(object):
 							ORDER BY totalAdmin DESC
 							LIMIT 100
 							"""
-		session = self.driver.session()
-		results = []
-		
-		for result in session.run(list_query, domain=self.domain):
-			results.append("{} - {}".format(result[0], result[1]))
+        session = self.driver.session()
+        results = []
 
-		session.close()
-		self.write_column_data(
-			sheet, "Top 100 Local Admin Outbound: {}", results)
+        for result in session.run(list_query, domain=self.domain):
+            results.append("{} - {}".format(result[0], result[1]))
 
-	def local_admin_inbound(self, sheet):
-    		list_query = """MATCH (c:Computer {domain:{domain}})
+        session.close()
+        self.write_column_data(
+            sheet, "Top 100 Local Admin Outbound: {}", results)
+
+    def local_admin_inbound(self, sheet):
+        list_query = """MATCH (c:Computer {domain:{domain}})
 							OPTIONAL MATCH (u1:User {domain:{domain}})-[:AdminTo]->(c)
 							OPTIONAL MATCH (u2:User {domain:{domain},enabled:true})-[:MemberOf*1..]->(:Group)-[:AdminTo]->(c)
 							WITH COLLECT(u1) + COLLECT(u2) as tempVar,c
@@ -1289,224 +1296,226 @@ class Privileges(object):
 							ORDER BY adminCount DESC
 							LIMIT 100
 							"""
-		session = self.driver.session()
-		results = []
-		
-		for result in session.run(list_query, domain=self.domain):
-			results.append("{} - {}".format(result[0], result[1]))
+        session = self.driver.session()
+        results = []
 
-		session.close()
-		self.write_column_data(
-			sheet, "Top 100 Local Admin Inbound: {}", results)
+        for result in session.run(list_query, domain=self.domain):
+            results.append("{} - {}".format(result[0], result[1]))
 
-	def most_session_computer(self, sheet):
-    		list_query = """Match (c:Computer {domain:{domain}})-[r:HasSession]->(u:User)
+        session.close()
+        self.write_column_data(
+            sheet, "Top 100 Local Admin Inbound: {}", results)
+
+    def most_session_computer(self, sheet):
+        list_query = """Match (c:Computer {domain:{domain}})-[r:HasSession]->(u:User)
 							WITH c,COUNT(u) as session
 							RETURN c.name,session
 							ORDER BY session DESC
 							LIMIT 100
 							"""
-		session = self.driver.session()
-		results = []
-		
-		for result in session.run(list_query, domain=self.domain):
-			results.append("{} - {}".format(result[0], result[1]))
+        session = self.driver.session()
+        results = []
 
-		session.close()
-		self.write_column_data(
-			sheet, "Top 100 Computers with most sessions: {}", results)
+        for result in session.run(list_query, domain=self.domain):
+            results.append("{} - {}".format(result[0], result[1]))
 
-	def most_session_user(self, sheet):
-    		list_query = """MATCH (u:User)<-[s:HasSession]-(c:Computer {domain:{domain}}) 
+        session.close()
+        self.write_column_data(
+            sheet, "Top 100 Computers with most sessions: {}", results)
+
+    def most_session_user(self, sheet):
+        list_query = """MATCH (u:User)<-[s:HasSession]-(c:Computer {domain:{domain}})
 							WITH u, count(s) as session
 							RETURN u.name,session
 							ORDER BY session DESC
 							LIMIT 100
 							"""
-		session = self.driver.session()
-		results = []
-		
-		for result in session.run(list_query, domain=self.domain):
-			results.append("{} - {}".format(result[0], result[1]))
+        session = self.driver.session()
+        results = []
 
-		session.close()
-		self.write_column_data(
-			sheet, "Top 100 Users with most sessions: {}", results)
+        for result in session.run(list_query, domain=self.domain):
+            results.append("{} - {}".format(result[0], result[1]))
+
+        session.close()
+        self.write_column_data(
+            sheet, "Top 100 Users with most sessions: {}", results)
+
 
 class MainMenu(cmd.Cmd):
-	def __init__(self):
-		self.m = Messages()
-		self.url = "bolt://localhost:7687"
-		self.username = "neo4j"
-		self.password = "neo4jj"
-		self.driver = None
-		self.connected = False
-		self.num_nodes = 500
-		self.filename = "BloodHoundAnalytics.xlsx"
-		self.domain = sys.argv[1]
-		self.domain_validated = False
+    def __init__(self):
+        self.m = Messages()
+        self.url = "bolt://localhost:7687"
+        self.username = "neo4j"
+        self.password = "neo4jj"
+        self.driver = None
+        self.connected = False
+        self.num_nodes = 500
+        self.filename = "BloodHoundAnalytics.xlsx"
+        self.domain = sys.argv[1]
+        self.domain_validated = False
 
-		cmd.Cmd.__init__(self)
+        cmd.Cmd.__init__(self)
 
-	def do_changefilename(self, args):
-		if args == "":
-			print "No filename specified"
-			return
-		self.filename = args
-		print "Change filename to {}".format(self.filename)
+    def do_changefilename(self, args):
+        if args == "":
+            print "No filename specified"
+            return
+        self.filename = args
+        print "Change filename to {}".format(self.filename)
 
-	def do_changedomain(self, args):
-		if args == "":
-			print "No domain specified"
-			return
-		self.domain_validated = False
-		self.domain = args
-		self.validate_domain()
+    def do_changedomain(self, args):
+        if args == "":
+            print "No domain specified"
+            return
+        self.domain_validated = False
+        self.domain = args
+        self.validate_domain()
 
-	def cmdloop(self):
-		while True:
-			self.m.title()
-			try:
-				cmd.Cmd.cmdloop(self)
-			except KeyboardInterrupt:
-				if self.driver is not None:
-					self.driver.close()
-				raise KeyboardInterrupt
+    def cmdloop(self):
+        while True:
+            self.m.title()
+            try:
+                cmd.Cmd.cmdloop(self)
+            except KeyboardInterrupt:
+                if self.driver is not None:
+                    self.driver.close()
+                raise KeyboardInterrupt
 
-	def do_dbconfig(self, args):
-		"Configure connection settings to the neo4j database"
-		print "Current Settings:"
-		print "DB Url: {}".format(self.url)
-		print "DB Username: {}".format(self.username)
-		print "DB Password: {}".format(self.password)
-		print ""
-		self.url = self.m.input_default("Enter DB URL", self.url)
-		self.username = self.m.input_default(
-			"Enter DB Username", self.username)
-		self.password = self.m.input_default(
-			"Enter DB Password", self.password)
-		print ""
-		print "New Settings:"
-		print "DB Url: {}".format(self.url)
-		print "DB Username: {}".format(self.username)
-		print "DB Password: {}".format(self.password)
-		print ""
-		print "Testing DB Connection"
-		self.test_db_conn()
+    def do_dbconfig(self, args):
+        "Configure connection settings to the neo4j database"
+        print "Current Settings:"
+        print "DB Url: {}".format(self.url)
+        print "DB Username: {}".format(self.username)
+        print "DB Password: {}".format(self.password)
+        print ""
+        self.url = self.m.input_default("Enter DB URL", self.url)
+        self.username = self.m.input_default(
+            "Enter DB Username", self.username)
+        self.password = self.m.input_default(
+            "Enter DB Password", self.password)
+        print ""
+        print "New Settings:"
+        print "DB Url: {}".format(self.url)
+        print "DB Username: {}".format(self.username)
+        print "DB Password: {}".format(self.password)
+        print ""
+        print "Testing DB Connection"
+        self.test_db_conn()
 
-	def do_exit(self, args):
-		raise KeyboardInterrupt
+    def do_exit(self, args):
+        raise KeyboardInterrupt
 
-	def do_connect(self, args):
-		self.test_db_conn()
+    def do_connect(self, args):
+        self.test_db_conn()
 
-	def test_db_conn(self):
-		self.connected = False
-		if self.driver is not None:
-			self.driver.close()
-		try:
-			self.driver = GraphDatabase.driver(
-				self.url, auth=(self.username, self.password))
-			self.connected = True
-			print "Database Connection Successful!"
-			self.validate_domain()
-		except Exception as e:
-			print e
-			self.connected = False
-			print "Database Connection Failed. Check your settings."
+    def test_db_conn(self):
+        self.connected = False
+        if self.driver is not None:
+            self.driver.close()
+        try:
+            self.driver = GraphDatabase.driver(
+                self.url, auth=(self.username, self.password))
+            self.connected = True
+            print "Database Connection Successful!"
+            self.validate_domain()
+        except Exception as e:
+            print e
+            self.connected = False
+            print "Database Connection Failed. Check your settings."
 
-	def validate_domain(self):
-		if not self.connected:
-			print "Cant validate domain. Connect using connect first"
-			return
-		
-		print "Validating Selected Domain"
-		session = self.driver.session()
-		for result in session.run("MATCH (n {domain:{domain}}) RETURN COUNT(n)", domain=self.domain):
-			if (int(result[0]) > 0):
-				print "Domain {domain} validated!".format(domain=self.domain)
-				self.domain_validated = True
-				self.create_workbook()
-				self.create_analytics()
-			else:
-				print "Invalid domain specified, use changedomain to pick a new one"
-	
-	def do_startanalysis(self, args):
-		if not self.connected:
-			print "Not connected to database. Use connect command"
-			return
-		
-		if not self.domain_validated:
-			print "Invalid domain or not validated. Use changedomain command"
-			return
-		
-		print "----------------------------------"
-		print "Generating Front Page"
-		print "----------------------------------"
-		print ""
-		self.front.do_front_page_analysis()
-		print "----------------------------------"
-		print "Generating Critical Assets Page"
-		print "----------------------------------"
-		print ""
-		self.crit.do_critical_asset_analysis()
-		print "----------------------------------"
-		print "Generating Low Hanging Fruit Page"
-		print "----------------------------------"
-		print ""
-		self.low.do_low_hanging_fruit_analysis()
-		print "----------------------------------"
-		print "Generating Cross Domain Page"
-		print "----------------------------------"
-		print ""
-		self.cross.do_cross_domain_analysis()
-		print "----------------------------------"
-		print "Generating High Privileges"
-		print "----------------------------------"
-		print ""
-		self.privilege.do_high_privileges()
-		print ""
-		print "Analytics Complete! Saving workbook to {}".format(self.filename)
-		self.save_workbook()
+    def validate_domain(self):
+        if not self.connected:
+            print "Cant validate domain. Connect using connect first"
+            return
 
-	def create_analytics(self):
-		self.crit = CriticalAssets(self.driver, self.domain, self.workbook)
-		self.low = LowHangingFruit(self.driver, self.domain, self.workbook)
-		self.front = FrontPage(self.driver, self.domain, self.workbook)
-		self.cross = CrossDomain(self.driver, self.domain, self.workbook)
-		self.privilege = Privileges(self.driver, self.domain, self.workbook)
-		self.save_workbook()
+        print "Validating Selected Domain"
+        session = self.driver.session()
+        for result in session.run("MATCH (n {domain:{domain}}) RETURN COUNT(n)", domain=self.domain):
+            if (int(result[0]) > 0):
+                print "Domain {domain} validated!".format(domain=self.domain)
+                self.domain_validated = True
+                self.create_workbook()
+                self.create_analytics()
+            else:
+                print "Invalid domain specified, use changedomain to pick a new one"
 
-	def create_workbook(self):
-		wb = Workbook()
-		ws = wb.active
-		ws.title = '{domain} Overview'.format(domain=self.domain)
-		wb.create_sheet(title="Critical Assets")
-		wb.create_sheet(title="Low Hanging Fruit")
-		wb.create_sheet(title="Cross Domain Attacks")
-		wb.create_sheet(title="High Privileges")
-		self.workbook = wb
+    def do_startanalysis(self, args):
+        if not self.connected:
+            print "Not connected to database. Use connect command"
+            return
 
-	def save_workbook(self):
-		for worksheet in self.workbook._sheets:
-			for col in worksheet.columns:
-				max_length = 0
-				#column = col[0].column # Get the column name
-				column = get_column_letter(col[0].column)  # Get the column name
-				for cell in col:
-					try:  # Necessary to avoid error on empty cells
-						if len(str(cell.value)) > max_length:
-							max_length = len(cell.value)
-					except:
-						pass
-				adjusted_width = (max_length + 2) * 1.2
-				worksheet.column_dimensions[column].width = adjusted_width
-		self.workbook.save(self.filename)
+        if not self.domain_validated:
+            print "Invalid domain or not validated. Use changedomain command"
+            return
+
+        print "----------------------------------"
+        print "Generating Front Page"
+        print "----------------------------------"
+        print ""
+        self.front.do_front_page_analysis()
+        print "----------------------------------"
+        print "Generating Critical Assets Page"
+        print "----------------------------------"
+        print ""
+        self.crit.do_critical_asset_analysis()
+        print "----------------------------------"
+        print "Generating Low Hanging Fruit Page"
+        print "----------------------------------"
+        print ""
+        self.low.do_low_hanging_fruit_analysis()
+        print "----------------------------------"
+        print "Generating Cross Domain Page"
+        print "----------------------------------"
+        print ""
+        self.cross.do_cross_domain_analysis()
+        print "----------------------------------"
+        print "Generating High Privileges"
+        print "----------------------------------"
+        print ""
+        self.privilege.do_high_privileges()
+        print ""
+        print "Analytics Complete! Saving workbook to {}".format(self.filename)
+        self.save_workbook()
+
+    def create_analytics(self):
+        self.crit = CriticalAssets(self.driver, self.domain, self.workbook)
+        self.low = LowHangingFruit(self.driver, self.domain, self.workbook)
+        self.front = FrontPage(self.driver, self.domain, self.workbook)
+        self.cross = CrossDomain(self.driver, self.domain, self.workbook)
+        self.privilege = Privileges(self.driver, self.domain, self.workbook)
+        self.save_workbook()
+
+    def create_workbook(self):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = '{domain} Overview'.format(domain=self.domain)
+        wb.create_sheet(title="Critical Assets")
+        wb.create_sheet(title="Low Hanging Fruit")
+        wb.create_sheet(title="Cross Domain Attacks")
+        wb.create_sheet(title="High Privileges")
+        self.workbook = wb
+
+    def save_workbook(self):
+        for worksheet in self.workbook._sheets:
+            for col in worksheet.columns:
+                max_length = 0
+                # column = col[0].column # Get the column name
+                column = get_column_letter(
+                    col[0].column)  # Get the column name
+                for cell in col:
+                    try:  # Necessary to avoid error on empty cells
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(cell.value)
+                    except:
+                        pass
+                adjusted_width = (max_length + 2) * 1.2
+                worksheet.column_dimensions[column].width = adjusted_width
+        self.workbook.save(self.filename)
 
 
 if __name__ == '__main__':
-	try:
-		MainMenu().cmdloop()
-	except KeyboardInterrupt:
-		print "Exiting"
-		sys.exit()
+    try:
+        MainMenu().cmdloop()
+    except KeyboardInterrupt:
+        print "Exiting"
+        sys.exit()
