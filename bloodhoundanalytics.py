@@ -177,9 +177,9 @@ class FrontPage(object):
 	
 	def create_highvalue_list(self, sheet):
         	list_query = """MATCH (n {highvalue: True}) 
-						RETURN n.name
-						ORDER BY n.name ASC
-						"""
+							RETURN n.name
+							ORDER BY n.name ASC
+							"""
 		session = self.driver.session()
 		results = []
 
@@ -222,7 +222,7 @@ class LowHangingFruit(object):
 			self.shortest_acl_path_domain_users, self.shortest_derivative_path_domain_users, self.shortest_hybrid_path_domain_users,
 			self.shortest_acl_path_everyone, self.shortest_derivative_path_everyone, self.shortest_hybrid_path_everyone,
 			self.shortest_acl_path_auth_users, self.shortest_derivative_path_auth_users, self.shortest_hybrid_path_auth_users,
-			self.kerberoastable_path_len, self.asreproastable_path_len, self.high_admin_comps
+			self.kerberoastable_path_len, self.asreproastable_path_len, self.high_admin_comps, self.server_2003, self.server_2008
 		]
 		sheet = self.workbook._sheets[2]
 		self.write_single_cell(sheet, 1, 1, "Domain Users to Domain Admins")
@@ -719,6 +719,36 @@ class LowHangingFruit(object):
 		session.close()
 		self.write_column_data(
 			sheet, "Computers with > 1000 Admins: {}", results)
+	
+	def server_2003(self, sheet):
+    		list_query = """MATCH (n:Computer {enabled: True,domain:{domain}}) 
+							WHERE n.operatingsystem =~ "Windows Server 2003.*" 
+							RETURN n.name
+							"""
+		session = self.driver.session()
+		results = []
+
+		for result in session.run(list_query, domain=self.domain):
+			results.append(result[0])
+
+		session.close()
+		self.write_column_data(
+			sheet, "Windows Server 2003: {}", results)
+
+	def server_2008(self, sheet):
+    		list_query = """MATCH (n:Computer {enabled: True,domain:{domain}}) 
+							WHERE n.operatingsystem =~ "Windows Server 2008.*" 
+							RETURN n.name
+							"""
+		session = self.driver.session()
+		results = []
+
+		for result in session.run(list_query, domain=self.domain):
+			results.append(result[0])
+
+		session.close()
+		self.write_column_data(
+			sheet, "Windows Server 2008(Expire 2020): {}", results)
 
 
 class CriticalAssets(object):
@@ -743,12 +773,28 @@ class CriticalAssets(object):
 		func_list = [
 			self.admins_on_dc, self.rdp_on_dc, self.gpo_on_dc, self.admin_on_exch,
 			self.rdp_on_exch, self.gpo_on_exch, self.da_controllers, self.da_sessions,
-			self.gpo_on_da, self.da_equiv_controllers, self.da_equiv_sessions, self.gpo_on_da_equiv]
+			self.gpo_on_da, self.da_equiv_controllers, self.da_equiv_sessions, self.gpo_on_da_equiv,
+			self.acl_domain]
 		sheet = self.workbook._sheets[1]
 		for f in func_list:
 			s = timer()
 			f(sheet)
 			print "{} completed in {}s".format(f.__name__, timer() - s)
+	
+	def acl_domain(self, sheet):
+    		list_query = """MATCH (n)-[r]->(u:Domain {name: {domain}}) 
+							WHERE r.isacl=true 
+							RETURN DISTINCT  n.name
+							"""
+		session = self.driver.session()
+		results = []
+		
+		for result in session.run(list_query, domain=self.domain):
+    			results.append(result[0])		
+
+		session.close()
+		self.write_column_data(
+			sheet, "Explicit ACL privileges on domain: {}", results)
 
 	def admins_on_dc(self, sheet):
 		list_query = """MATCH (g:Group {domain:{domain}})
@@ -1052,7 +1098,8 @@ class CrossDomain(object):
 	
 	def do_cross_domain_analysis(self):
 		func_list = [
-			self.foreign_admins, self.foreign_gpo_controllers, self.foreign_user_controllers
+			self.foreign_admins, self.foreign_gpo_controllers, self.foreign_user_controllers,
+			self.foreign_session
 		]
 		sheet = self.workbook._sheets[3]
 
@@ -1107,26 +1154,168 @@ class CrossDomain(object):
 			sheet, "GPOs with Foreign Controllers: {}", results)
 	
 	def foreign_user_controllers(self, sheet):
-		list_query = """MATCH (g:Group {domain:{domain}})
-						OPTIONAL MATCH (n)-[{isacl:true}]->(g)
-						WHERE (n:User OR n:Computer) AND NOT n.domain = g.domain
-						OPTIONAL MATCH (m)-[:MemberOf*1..]->(:Group)-[{isacl:true}]->(g)
-						WHERE (m:User OR m:Computer) AND NOT m.domain = g.domain
-						WITH COLLECT(n) + COLLECT(m) AS tempVar,g
-						UNWIND tempVar AS foreignGroupControllers
-						RETURN g.name,COUNT(DISTINCT(foreignGroupControllers))
-						ORDER BY COUNT(DISTINCT(foreignGroupControllers)) DESC
+    		list_query = """MATCH (g:Group {domain:{domain}})
+							OPTIONAL MATCH (n)-[{isacl:true}]->(g)
+							WHERE (n:User OR n:Computer) AND NOT n.domain = g.domain
+							OPTIONAL MATCH (m)-[:MemberOf*1..]->(:Group)-[{isacl:true}]->(g)
+							WHERE (m:User OR m:Computer) AND NOT m.domain = g.domain
+							WITH COLLECT(n) + COLLECT(m) AS tempVar,g
+							UNWIND tempVar AS foreignGroupControllers
+							RETURN g.name,COUNT(DISTINCT(foreignGroupControllers))
+							ORDER BY COUNT(DISTINCT(foreignGroupControllers)) DESC
+							"""
+
+		session = self.driver.session()
+		results = []
+
+		for result in session.run(list_query, domain=self.domain):
+			results.append(result[0])
+
+		session.close()
+		self.write_column_data(
+			sheet, "Groups with Foreign Controllers: {}", results)
+
+	def foreign_session(self, sheet):
+		list_query = """MATCH ((s:Computer {domain:{domain}})-[r:HasSession*1]->(t:User)) 
+						WHERE NOT s.domain = t.domain
+						RETURN s.name
 						"""
 
 		session = self.driver.session()
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
+			results.append(result[0])
+
+		session.close()
+		self.write_column_data(
+			sheet, "Computers with Foreign Session: {}", results)
+
+class Privileges(object):
+    	def __init__(self, driver, domain, workbook):
+		self.driver = driver
+		self.domain = domain
+		self.col_count = 1
+		self.workbook = workbook
+	
+	def write_column_data(self, sheet, title, results):
+		count = len(results)
+		offset = 1
+		font = styles.Font(bold=True)
+		c = sheet.cell(offset, self.col_count)
+		c.font = font
+		sheet.cell(offset, self.col_count, value=title.format(count))
+		for i in xrange(0, count):
+			sheet.cell(i+offset+1, self.col_count, value=results[i])
+		self.col_count += 1
+
+	def write_single_cell(self, sheet, row, column, text):
+		sheet.cell(row, column, value=text)
+	
+	def do_high_privileges(self):
+		func_list = [
+			self.da_members, self.local_admin_outbound, self.local_admin_inbound,
+			self.most_session_user, self.most_session_computer
+		]
+		sheet = self.workbook._sheets[4]
+
+		for f in func_list:
+			s = timer()
+			f(sheet)
+			print "{} completed in {}s".format(f.__name__, timer() - s)
+		
+	def da_members(self, sheet):
+		list_query = """MATCH (n:Group {domain:{domain}}) 
+						WHERE n.objectsid =~ "(?i)S-1-5.*-512" WITH n MATCH
+						(n)<-[r:MemberOf*1..]-(m) 
+						RETURN m.name
+						"""
+		session = self.driver.session()
+		results = []
+		
+		for result in session.run(list_query, domain=self.domain):
+    			results.append(result[0])		
+
+		session.close()
+		self.write_column_data(
+			sheet, "Domain Admin members: {}", results)
+
+	def local_admin_outbound(self, sheet):
+    		list_query = """MATCH (u:User {domain:{domain}})
+							WITH u
+							OPTIONAL MATCH (u)-[r:AdminTo]->(c:Computer)
+							WITH u,COUNT(c) as expAdmin
+							OPTIONAL MATCH (u)-[r:MemberOf*1..]->(g:Group)-[r2:AdminTo]->(c:Computer)
+							WHERE NOT (u)-[:AdminTo]->(c)
+							WITH u,expAdmin,COUNT(DISTINCT(c)) as unrolledAdmin
+							RETURN u.name,expAdmin + unrolledAdmin as totalAdmin
+							ORDER BY totalAdmin DESC
+							LIMIT 100
+							"""
+		session = self.driver.session()
+		results = []
+		
+		for result in session.run(list_query, domain=self.domain):
 			results.append("{} - {}".format(result[0], result[1]))
 
 		session.close()
 		self.write_column_data(
-			sheet, "Groups with Foreign Controllers: {}", results)
+			sheet, "Top 100 Local Admin Outbound: {}", results)
+
+	def local_admin_inbound(self, sheet):
+    		list_query = """MATCH (c:Computer {domain:{domain}})
+							OPTIONAL MATCH (u1:User {domain:{domain}})-[:AdminTo]->(c)
+							OPTIONAL MATCH (u2:User {domain:{domain},enabled:true})-[:MemberOf*1..]->(:Group)-[:AdminTo]->(c)
+							WITH COLLECT(u1) + COLLECT(u2) as tempVar,c
+							UNWIND tempVar as admins
+							WITH c,COUNT(DISTINCT(admins)) as adminCount
+							RETURN c.name,adminCount
+							ORDER BY adminCount DESC
+							LIMIT 100
+							"""
+		session = self.driver.session()
+		results = []
+		
+		for result in session.run(list_query, domain=self.domain):
+			results.append("{} - {}".format(result[0], result[1]))
+
+		session.close()
+		self.write_column_data(
+			sheet, "Top 100 Local Admin Inbound: {}", results)
+
+	def most_session_computer(self, sheet):
+    		list_query = """Match (c:Computer {domain:{domain}})-[r:HasSession]->(u:User)
+							WITH c,COUNT(u) as session
+							RETURN c.name,session
+							ORDER BY session DESC
+							LIMIT 100
+							"""
+		session = self.driver.session()
+		results = []
+		
+		for result in session.run(list_query, domain=self.domain):
+			results.append("{} - {}".format(result[0], result[1]))
+
+		session.close()
+		self.write_column_data(
+			sheet, "Top 100 Computers with most sessions: {}", results)
+
+	def most_session_user(self, sheet):
+    		list_query = """MATCH (u:User)<-[s:HasSession]-(c:Computer {domain:{domain}}) 
+							WITH u, count(s) as session
+							RETURN u.name,session
+							ORDER BY session DESC
+							LIMIT 100
+							"""
+		session = self.driver.session()
+		results = []
+		
+		for result in session.run(list_query, domain=self.domain):
+			results.append("{} - {}".format(result[0], result[1]))
+
+		session.close()
+		self.write_column_data(
+			sheet, "Top 100 Users with most sessions: {}", results)
 
 class MainMenu(cmd.Cmd):
 	def __init__(self):
@@ -1255,6 +1444,12 @@ class MainMenu(cmd.Cmd):
 		print "----------------------------------"
 		print ""
 		self.cross.do_cross_domain_analysis()
+		print "----------------------------------"
+		print "Generating High Privileges"
+		print "----------------------------------"
+		print ""
+		self.privilege.do_high_privileges()
+		print ""
 		print "Analytics Complete! Saving workbook to {}".format(self.filename)
 		self.save_workbook()
 
@@ -1263,6 +1458,7 @@ class MainMenu(cmd.Cmd):
 		self.low = LowHangingFruit(self.driver, self.domain, self.workbook)
 		self.front = FrontPage(self.driver, self.domain, self.workbook)
 		self.cross = CrossDomain(self.driver, self.domain, self.workbook)
+		self.privilege = Privileges(self.driver, self.domain, self.workbook)
 		self.save_workbook()
 
 	def create_workbook(self):
@@ -1272,6 +1468,7 @@ class MainMenu(cmd.Cmd):
 		wb.create_sheet(title="Critical Assets")
 		wb.create_sheet(title="Low Hanging Fruit")
 		wb.create_sheet(title="Cross Domain Attacks")
+		wb.create_sheet(title="High Privileges")
 		self.workbook = wb
 
 	def save_workbook(self):
