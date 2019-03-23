@@ -1,6 +1,6 @@
 
 ### Changelist:
-    High Value List added to Overview
+    High Value List,Users and Computers with attack path to Domain Admin added to Overview
     ACL privileges on Domain added to Critical Assets
     Legacy Systems added to Low Hanging Fruit
     Foreign sessions added to Cross Domain Attack
