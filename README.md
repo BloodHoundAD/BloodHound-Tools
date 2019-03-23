@@ -4,7 +4,7 @@
     ACL privileges on Domain added to Critical Assets
     Legacy Systems added to Low Hanging Fruit
     Foreign sessions added to Cross Domain Attack
-    Added section High Privileges for local admin, session and DA members
+    Added section High Privileges for local admin, session, DA and High Value group members
     
     Bug fixes imported from pull request
 
