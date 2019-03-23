@@ -1214,8 +1214,8 @@ class Privileges(object):
 	
 	def do_high_privileges(self):
 		func_list = [
-			self.da_members, self.local_admin_outbound, self.local_admin_inbound,
-			self.most_session_user, self.most_session_computer
+			self.da_members, self.high_value_members, self.local_admin_outbound, 
+			self.local_admin_inbound, self.most_session_user, self.most_session_computer
 		]
 		sheet = self.workbook._sheets[4]
 
@@ -1225,11 +1225,12 @@ class Privileges(object):
 			print "{} completed in {}s".format(f.__name__, timer() - s)
 		
 	def da_members(self, sheet):
-		list_query = """MATCH (n:Group {domain:{domain}}) 
-						WHERE n.objectsid =~ "(?i)S-1-5.*-512" WITH n MATCH
-						(n)<-[r:MemberOf*1..]-(m) 
-						RETURN m.name
-						"""
+    		list_query = """MATCH (n:Group {domain:{domain}}) 
+							WHERE n.objectsid =~ "(?i)S-1-5.*-512" WITH n MATCH
+							(n)<-[r:MemberOf*1..]-(m) 
+							RETURN m.name
+							ORDER BY m.name ASC
+							"""
 		session = self.driver.session()
 		results = []
 		
@@ -1239,6 +1240,21 @@ class Privileges(object):
 		session.close()
 		self.write_column_data(
 			sheet, "Domain Admin members: {}", results)
+
+	def high_value_members(self, sheet):
+		list_query = """MATCH (n)-[:MemberOf*1..]->(g {highvalue: True}) 
+						RETURN DISTINCT n.name
+						ORDER BY n.name ASC
+						"""
+		session = self.driver.session()
+		results = []
+		
+		for result in session.run(list_query, domain=self.domain):
+    			results.append(result[0])		
+
+		session.close()
+		self.write_column_data(
+			sheet, "High Value Group members: {}", results)
 
 	def local_admin_outbound(self, sheet):
     		list_query = """MATCH (u:User {domain:{domain}})
