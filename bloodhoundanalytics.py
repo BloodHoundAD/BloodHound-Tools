@@ -34,16 +34,18 @@ class FrontPage(object):
         self.col_count = 1
         self.workbook = workbook
 
-    # Mofidied function
+    # Modified, dont copy this
     def write_column_data(self, sheet, title, results):
         count = len(results)
         offset = 1
+        count_cell = 4
         font = styles.Font(bold=True)
-        c = sheet.cell(offset, 4)
+        c = sheet.cell(offset, count_cell)
         c.font = font
-        sheet.cell(offset, 4, value=title.format(count))
+        sheet.cell(offset, count_cell, value=title.format(count))
         for i in xrange(0, count):
-            sheet.cell(i + offset + 1, 4, value=results[i])
+            sheet.cell(i + offset + 1, count_cell, value=results[i])
+        count_cell += 1
 
     def write_single_cell(self, sheet, row, column, text):
         sheet.cell(row, column, value=text)
@@ -146,8 +148,8 @@ class FrontPage(object):
         for result in session.run(query, domain=self.domain):
             user_session_pct = result[0]
 
-        query = """MATCH (u:User)
-					MATCH (g:Group)
+        query = """MATCH (u:User {domain: {domain}})
+					MATCH (g:Group {domain: {domain}})
 					WHERE g.objectsid ENDS WITH '-512'
 					WITH g, COUNT(u) as userCount
 					MATCH p = shortestPath((u:User)-[*1..]->(g))
@@ -157,8 +159,8 @@ class FrontPage(object):
         for result in session.run(query, domain=self.domain):
             Users_to_da = result[0]
 
-        query = """MATCH (c:Computer)
-					MATCH (g:Group)
+        query = """MATCH (c:Computer {domain: {domain}})
+					MATCH (g:Group {domain: {domain}})
 					WHERE g.objectsid ENDS WITH '-512'
 					WITH g, COUNT(c) as ComputerCount
 					MATCH p = shortestPath((c:Computer)-[*1..]->(g))
@@ -471,7 +473,7 @@ class LowHangingFruit(object):
 
         session.close()
         self.write_column_data(
-            sheet, "Domain Users with DCOM Rights: {}", results)
+            sheet, "Everyone with DCOM Rights: {}", results)
 
     def authenticated_users_dcom(self, sheet):
 
@@ -492,7 +494,7 @@ class LowHangingFruit(object):
 
         session.close()
         self.write_column_data(
-            sheet, "Domain Users with DCOM Rights: {}", results)
+            sheet, "Authenticated Users with DCOM Rights: {}", results)
 
     def shortest_acl_path_domain_users(self, sheet):
         count_query = """MATCH (g1:Group {domain:{domain}})
@@ -1182,16 +1184,16 @@ class CrossDomain(object):
             sheet, "Groups with Foreign Controllers: {}", results)
 
     def foreign_session(self, sheet):
-        list_query = """MATCH ((s:Computer {domain:{domain}})-[r:HasSession*1]->(t:User))
+        list_query = """MATCH (s:Computer {domain:{domain}})-[r:HasSession*1]->(t:User)
 						WHERE NOT s.domain = t.domain
-						RETURN s.name
+						RETURN s.name, t.name
 						"""
 
         session = self.driver.session()
         results = []
 
         for result in session.run(list_query, domain=self.domain):
-            results.append(result[0])
+            results.append("{} - {}".format(result[0], result[1]))
 
         session.close()
         self.write_column_data(
@@ -1249,7 +1251,7 @@ class Privileges(object):
             sheet, "Domain Admin members: {}", results)
 
     def high_value_members(self, sheet):
-        list_query = """MATCH (n)-[:MemberOf*1..]->(g {highvalue: True})
+        list_query = """MATCH (n)-[:MemberOf*1..]->(g {highvalue: True,domain: {domain}})
 						RETURN DISTINCT n.name
 						ORDER BY n.name ASC
 						"""
