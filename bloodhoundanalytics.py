@@ -1,4 +1,5 @@
 from openpyxl import Workbook, styles
+from openpyxl.utils import get_column_letter
 from neo4j.v1 import GraphDatabase
 import cmd
 import sys
@@ -8,7 +9,6 @@ from timeit import default_timer as timer
 # Andy Robbins - @_wald0
 # Rohan Vazarkar - @CptJesus
 # https://www.specterops.io
-
 # License: GPLv3
 
 class Messages(object):
@@ -32,13 +32,26 @@ class FrontPage(object):
 		self.domain = domain
 		self.col_count = 1
 		self.workbook = workbook
+	
+	def write_column_data(self, sheet, title, results):
+    		count = len(results)
+		offset = 10
+		font = styles.Font(bold=True)
+		c = sheet.cell(offset, self.col_count)
+		c.font = font
+		sheet.cell(offset, self.col_count, value=title.format(count))
+		for i in xrange(0, count):
+			sheet.cell(i+offset+1, self.col_count, value=results[i])
+		self.col_count += 1
 
 	def write_single_cell(self, sheet, row, column, text):
 		sheet.cell(row, column, value=text)
 
 	def do_front_page_analysis(self):
 		func_list = [self.create_node_statistics,
-					 self.create_edge_statistics, self.create_qa_statistics]
+					 self.create_edge_statistics, 
+					 self.create_qa_statistics,
+					 self.create_highvalue_list]
 		sheet = self.workbook._sheets[0]
 		self.write_single_cell(sheet, 1, 1, "Node Statistics")
 		self.write_single_cell(sheet, 1, 2, "Edge Statistics")
@@ -57,27 +70,27 @@ class FrontPage(object):
 		session = self.driver.session()
 		for result in session.run("MATCH (n:User {domain:{domain}}) RETURN count(n)", domain=self.domain):
 			self.write_single_cell(
-				sheet, 2, 1, "Users: {:,}".format(result._values[0]))
+				sheet, 2, 1, "Users: {:,}".format(result[0]))
 
 		for result in session.run("MATCH (n:Group {domain:{domain}}) RETURN count(n)", domain=self.domain):
 			self.write_single_cell(
-				sheet, 3, 1, "Groups: {:,}".format(result._values[0]))
+				sheet, 3, 1, "Groups: {:,}".format(result[0]))
 
 		for result in session.run("MATCH (n:Computer {domain:{domain}}) RETURN count(n)", domain=self.domain):
 			self.write_single_cell(
-				sheet, 4, 1, "Computers: {:,}".format(result._values[0]))
+				sheet, 4, 1, "Computers: {:,}".format(result[0]))
 
-		for result in session.run("MATCH (n:Domain {domain:{domain}}) RETURN count(n)", domain=self.domain):
+		for result in session.run("MATCH (n:Domain) RETURN count(n)", domain=self.domain):
 			self.write_single_cell(
-				sheet, 5, 1, "Domains: {:,}".format(result._values[0]))
+				sheet, 5, 1, "Domains in trust: {:,}".format(result[0]-1))
 
-		for result in session.run("MATCH (n:GPO {domain:{domain}}) RETURN count(n)", domain=self.domain):
+		for result in session.run("MATCH (n:GPO) WHERE n.name =~ '.*"+ self.domain +"$' RETURN count(n)"):
 			self.write_single_cell(
-				sheet, 6, 1, "GPOs: {:,}".format(result._values[0]))
+				sheet, 6, 1, "GPOs: {:,}".format(result[0]))
 
-		for result in session.run("MATCH (n:OU {domain:{domain}}) RETURN count(n)", domain=self.domain):
+		for result in session.run("MATCH (n:OU) WHERE n.name =~ '.*@"+ self.domain +"$' RETURN count(n)"):
 			self.write_single_cell(
-				sheet, 7, 1, "OUs: {:,}".format(result._values[0]))
+				sheet, 7, 1, "OUs: {:,}".format(result[0]))
 
 		session.close()
 
@@ -85,23 +98,23 @@ class FrontPage(object):
 		session = self.driver.session()
 		for result in session.run("MATCH ()-[r:MemberOf]->({domain:{domain}}) RETURN count(r)", domain=self.domain):
 			self.write_single_cell(
-				sheet, 2, 2, "MemberOf: {:,}".format(result._values[0]))
+				sheet, 2, 2, "MemberOf: {:,}".format(result[0]))
 
 		for result in session.run("MATCH ()-[r:AdminTo]->({domain:{domain}}) RETURN count(r)", domain=self.domain):
 			self.write_single_cell(
-				sheet, 3, 2, "AdminTo: {:,}".format(result._values[0]))
+				sheet, 3, 2, "AdminTo: {:,}".format(result[0]))
 
 		for result in session.run("MATCH ()-[r:HasSession]->({domain:{domain}}) RETURN count(r)", domain=self.domain):
 			self.write_single_cell(
-				sheet, 4, 2, "HasSession: {:,}".format(result._values[0]))
+				sheet, 4, 2, "HasSession: {:,}".format(result[0]))
 
-		for result in session.run("MATCH ()-[r:GpLink]->({domain:{domain}}) RETURN count(r)", domain=self.domain):
+		for result in session.run("MATCH ()-[r:GpLink]-(n) WHERE n.name =~ '.*"+ self.domain +"$' RETURN count(r)"):
 			self.write_single_cell(
-				sheet, 5, 2, "GpLinks: {:,}".format(result._values[0]))
+				sheet, 5, 2, "GpLinks: {:,}".format(result[0]))
 
 		for result in session.run("MATCH ()-[r {isacl:true}]->({domain:{domain}}) RETURN count(r)", domain=self.domain):
 			self.write_single_cell(
-				sheet, 6, 2, "ACLs: {:,}".format(result._values[0]))
+				sheet, 6, 2, "ACLs: {:,}".format(result[0]))
 		session.close()
 
 	def create_qa_statistics(self, sheet):
@@ -112,7 +125,7 @@ class FrontPage(object):
 					RETURN toInt(100 * (toFloat(computersWithAdminsCount) / COUNT(c2)))
 					"""
 		for result in session.run(query, domain=self.domain):
-			computer_local_admin_pct = result._values[0]
+			computer_local_admin_pct = result[0]
 		
 		query = """MATCH (c:Computer {domain:{domain}})-[:HasSession]->()
 					WITH COUNT(DISTINCT(c)) as computersWithSessions
@@ -121,7 +134,7 @@ class FrontPage(object):
 					"""
 		
 		for result in session.run(query, domain=self.domain):
-			computer_session_pct = result._values[0]
+			computer_session_pct = result[0]
 
 		query = """MATCH ()-[:HasSession]->(u:User {domain:{domain}})
 					WITH COUNT(DISTINCT(u)) as usersWithSessions
@@ -130,12 +143,53 @@ class FrontPage(object):
 					"""
 		
 		for result in session.run(query, domain=self.domain):
-			user_session_pct = result._values[0]
+			user_session_pct = result[0]
+
+		query = """MATCH (u:User)
+					MATCH (g:Group)
+					WHERE g.objectsid ENDS WITH '-512'
+					WITH g, COUNT(u) as userCount
+					MATCH p = shortestPath((u:User)-[*1..]->(g))
+					RETURN toint(100.0 * COUNT(u) / userCount)
+					"""
+		
+		for result in session.run(query, domain=self.domain):
+			Users_to_da = result[0]
+
+		query = """MATCH (c:Computer)
+					MATCH (g:Group)
+					WHERE g.objectsid ENDS WITH '-512'
+					WITH g, COUNT(c) as ComputerCount
+					MATCH p = shortestPath((c:Computer)-[*1..]->(g))
+					RETURN toint(100.0 * COUNT(c) / ComputerCount)
+					"""
+		
+		for result in session.run(query, domain=self.domain):
+			Computers_to_da = result[0]
 		
 		session.close()
 		self.write_single_cell(sheet, 2, 3, "Computers With Local Admin Data: {}%".format(computer_local_admin_pct))
 		self.write_single_cell(sheet, 3, 3, "Computers With Session Data: {}%".format(computer_session_pct))
 		self.write_single_cell(sheet, 4, 3, "Users With Session Data: {}%".format(user_session_pct))
+		self.write_single_cell(sheet, 5, 3, "Users with attack path to Domain Admin: {}%".format(Users_to_da))
+		self.write_single_cell(sheet, 6, 3, "Computers with attack path to Domain Admin: {}%".format(Computers_to_da))
+	
+	
+	def create_highvalue_list(self, sheet):
+        	list_query = """MATCH (n {highvalue: True}) 
+						RETURN n.name
+						ORDER BY n.name ASC
+						"""
+		session = self.driver.session()
+		results = []
+
+		for result in session.run(list_query, domain=self.domain):
+			results.append(result[0])
+
+		session.close()
+		self.write_column_data(
+			sheet, "High Value List: {}", results)
+
 
 
 class LowHangingFruit(object):
@@ -168,13 +222,12 @@ class LowHangingFruit(object):
 			self.shortest_acl_path_domain_users, self.shortest_derivative_path_domain_users, self.shortest_hybrid_path_domain_users,
 			self.shortest_acl_path_everyone, self.shortest_derivative_path_everyone, self.shortest_hybrid_path_everyone,
 			self.shortest_acl_path_auth_users, self.shortest_derivative_path_auth_users, self.shortest_hybrid_path_auth_users,
-			self.kerberoastable_path_len, self.high_admin_comps
+			self.kerberoastable_path_len, self.asreproastable_path_len, self.high_admin_comps
 		]
 		sheet = self.workbook._sheets[2]
 		self.write_single_cell(sheet, 1, 1, "Domain Users to Domain Admins")
 		self.write_single_cell(sheet, 1, 2, "Everyone to Domain Admins")
-		self.write_single_cell(
-			sheet, 1, 3, "Authenticated Users to Domain Admins")
+		self.write_single_cell(sheet, 1, 3, "Authenticated Users to Domain Admins")
 		font = styles.Font(bold=True)
 		sheet.cell(1, 1).font = font
 		sheet.cell(1, 2).font = font
@@ -199,7 +252,7 @@ class LowHangingFruit(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -219,7 +272,7 @@ class LowHangingFruit(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(sheet, "Everyone with Local Admin: {}", results)
@@ -239,7 +292,7 @@ class LowHangingFruit(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -261,7 +314,7 @@ class LowHangingFruit(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -283,7 +336,7 @@ class LowHangingFruit(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -305,7 +358,7 @@ class LowHangingFruit(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -326,7 +379,7 @@ class LowHangingFruit(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -347,7 +400,7 @@ class LowHangingFruit(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(sheet, "Everyone with RDP Rights: {}", results)
@@ -367,7 +420,7 @@ class LowHangingFruit(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -388,7 +441,7 @@ class LowHangingFruit(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -409,7 +462,7 @@ class LowHangingFruit(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -430,7 +483,7 @@ class LowHangingFruit(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -448,7 +501,7 @@ class LowHangingFruit(object):
 		session = self.driver.session()
 		count = 0
 		for result in session.run(count_query, domain=self.domain):
-			count = result._values[0]
+			count = result[0]
 
 		session.close()
 		self.write_single_cell(
@@ -466,7 +519,7 @@ class LowHangingFruit(object):
 		session = self.driver.session()
 		count = 0
 		for result in session.run(count_query, domain=self.domain):
-			count = result._values[0]
+			count = result[0]
 
 		session.close()
 		self.write_single_cell(
@@ -487,7 +540,7 @@ class LowHangingFruit(object):
 		session = self.driver.session()
 		count = 0
 		for result in session.run(count_query, domain=self.domain):
-			count = result._values[0]
+			count = result[0]
 
 		session.close()
 		self.write_single_cell(
@@ -505,7 +558,7 @@ class LowHangingFruit(object):
 		session = self.driver.session()
 		count = 0
 		for result in session.run(count_query, domain=self.domain):
-			count = result._values[0]
+			count = result[0]
 
 		session.close()
 		self.write_single_cell(
@@ -523,7 +576,7 @@ class LowHangingFruit(object):
 		session = self.driver.session()
 		count = 0
 		for result in session.run(count_query, domain=self.domain):
-			count = result._values[0]
+			count = result[0]
 
 		session.close()
 		self.write_single_cell(
@@ -544,7 +597,7 @@ class LowHangingFruit(object):
 		session = self.driver.session()
 		count = 0
 		for result in session.run(count_query, domain=self.domain):
-			count = result._values[0]
+			count = result[0]
 
 		session.close()
 		self.write_single_cell(
@@ -562,7 +615,7 @@ class LowHangingFruit(object):
 		session = self.driver.session()
 		count = 0
 		for result in session.run(count_query, domain=self.domain):
-			count = result._values[0]
+			count = result[0]
 
 		session.close()
 		self.write_single_cell(
@@ -580,7 +633,7 @@ class LowHangingFruit(object):
 		session = self.driver.session()
 		count = 0
 		for result in session.run(count_query, domain=self.domain):
-			count = result._values[0]
+			count = result[0]
 
 		session.close()
 		self.write_single_cell(
@@ -601,7 +654,7 @@ class LowHangingFruit(object):
 		session = self.driver.session()
 		count = 0
 		for result in session.run(count_query, domain=self.domain):
-			count = result._values[0]
+			count = result[0]
 
 		session.close()
 		self.write_single_cell(
@@ -620,11 +673,30 @@ class LowHangingFruit(object):
 		results = []
 		for result in session.run(list_query, domain=self.domain):
 			results.append(
-				"{} - {}".format(result._values[0], result._values[1]))
+				"{} - {}".format(result[0], result[1]))
 
 		session.close()
 		self.write_column_data(
 			sheet, "Kerberoastable User to DA Path Length", results)
+
+	def asreproastable_path_len(self, sheet):
+		list_query = """MATCH (u:User {domain:{domain},dontreqpreauth:True})
+						MATCH (g:Group {domain:{domain}})
+						WHERE g.objectsid ENDS WITH "-512" AND NOT u.name STARTS WITH "KRBTGT@"
+						MATCH p = shortestPath((u)-[*1..]->(g))
+						RETURN u.name,LENGTH(p)
+						ORDER BY LENGTH(p) ASC
+						"""
+
+		session = self.driver.session()
+		results = []
+		for result in session.run(list_query, domain=self.domain):
+			results.append(
+				"{} - {}".format(result[0], result[1]))
+
+		session.close()
+		self.write_column_data(
+			sheet, "ASReproastable User to DA Path Length", results)
 	
 	def high_admin_comps(self, sheet):
 		list_query = """MATCH (c:Computer {domain:{domain}})
@@ -639,10 +711,10 @@ class LowHangingFruit(object):
 		session = self.driver.session()
 		results = []
 		for result in session.run(list_query, domain=self.domain):
-			count = result._values[1]
+			count = result[1]
 			if (count > 1000):
 				results.append(
-					"{} - {}".format(result._values[0], count))
+					"{} - {}".format(result[0], count))
 
 		session.close()
 		self.write_column_data(
@@ -695,7 +767,7 @@ class CriticalAssets(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -708,7 +780,6 @@ class CriticalAssets(object):
 					OPTIONAL MATCH (n)-[:CanRDP]->(c)
 					OPTIONAL MATCH (m)-[:MemberOf*1..]->(:Group)-[:CanRDP]->(c)
 					WHERE (n:User OR n:Computer) AND (m:User OR m:Computer)
-
 					WITH COLLECT(n) + COLLECT(m) as tempVar1
 					UNWIND tempVar1 as tempVar2
 					WITH DISTINCT(tempVar2) as tempVar3
@@ -719,7 +790,7 @@ class CriticalAssets(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -747,7 +818,7 @@ class CriticalAssets(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -771,7 +842,7 @@ class CriticalAssets(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -795,7 +866,7 @@ class CriticalAssets(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -826,7 +897,7 @@ class CriticalAssets(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -847,7 +918,7 @@ class CriticalAssets(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -864,7 +935,7 @@ class CriticalAssets(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -890,7 +961,7 @@ class CriticalAssets(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -910,7 +981,7 @@ class CriticalAssets(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -926,7 +997,7 @@ class CriticalAssets(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -952,7 +1023,7 @@ class CriticalAssets(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append(result._values[0])
+			results.append(result[0])
 
 		session.close()
 		self.write_column_data(
@@ -1006,7 +1077,7 @@ class CrossDomain(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append("{} - {}".format(result._values[0], result._values[1]))
+			results.append("{} - {}".format(result[0], result[1]))
 
 		session.close()
 		self.write_column_data(
@@ -1029,7 +1100,7 @@ class CrossDomain(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append("{} - {}".format(result._values[0], result._values[1]))
+			results.append("{} - {}".format(result[0], result[1]))
 
 		session.close()
 		self.write_column_data(
@@ -1051,11 +1122,11 @@ class CrossDomain(object):
 		results = []
 
 		for result in session.run(list_query, domain=self.domain):
-			results.append("{} - {}".format(result._values[0], result._values[1]))
+			results.append("{} - {}".format(result[0], result[1]))
 
 		session.close()
 		self.write_column_data(
-			sheet, "GPOs with Foreign Controllers: {}", results)
+			sheet, "Groups with Foreign Controllers: {}", results)
 
 class MainMenu(cmd.Cmd):
 	def __init__(self):
@@ -1071,7 +1142,6 @@ class MainMenu(cmd.Cmd):
 		self.domain_validated = False
 
 		cmd.Cmd.__init__(self)
-		self.create_workbook()
 
 	def do_changefilename(self, args):
 		if args == "":
@@ -1135,7 +1205,8 @@ class MainMenu(cmd.Cmd):
 			self.connected = True
 			print "Database Connection Successful!"
 			self.validate_domain()
-		except:
+		except Exception as e:
+			print e
 			self.connected = False
 			print "Database Connection Failed. Check your settings."
 
@@ -1147,16 +1218,17 @@ class MainMenu(cmd.Cmd):
 		print "Validating Selected Domain"
 		session = self.driver.session()
 		for result in session.run("MATCH (n {domain:{domain}}) RETURN COUNT(n)", domain=self.domain):
-			if (int(result._values[0]) > 0):
-				print "Domain Validated"
+			if (int(result[0]) > 0):
+				print "Domain {domain} validated!".format(domain=self.domain)
 				self.domain_validated = True
+				self.create_workbook()
 				self.create_analytics()
 			else:
 				print "Invalid domain specified, use changedomain to pick a new one"
 	
 	def do_startanalysis(self, args):
 		if not self.connected:
-			print "Not connected to datbase. Use connect command"
+			print "Not connected to database. Use connect command"
 			return
 		
 		if not self.domain_validated:
@@ -1196,7 +1268,7 @@ class MainMenu(cmd.Cmd):
 	def create_workbook(self):
 		wb = Workbook()
 		ws = wb.active
-		ws.title = "Front Page"
+		ws.title = '{domain} Overview'.format(domain=self.domain)
 		wb.create_sheet(title="Critical Assets")
 		wb.create_sheet(title="Low Hanging Fruit")
 		wb.create_sheet(title="Cross Domain Attacks")
@@ -1206,7 +1278,8 @@ class MainMenu(cmd.Cmd):
 		for worksheet in self.workbook._sheets:
 			for col in worksheet.columns:
 				max_length = 0
-				column = col[0].column  # Get the column name
+				#column = col[0].column # Get the column name
+				column = get_column_letter(col[0].column)  # Get the column name
 				for cell in col:
 					try:  # Necessary to avoid error on empty cells
 						if len(str(cell.value)) > max_length:
@@ -1215,7 +1288,7 @@ class MainMenu(cmd.Cmd):
 						pass
 				adjusted_width = (max_length + 2) * 1.2
 				worksheet.column_dimensions[column].width = adjusted_width
-		self.workbook.save("BloodHoundAnalytics.xlsx")
+		self.workbook.save(self.filename)
 
 
 if __name__ == '__main__':
