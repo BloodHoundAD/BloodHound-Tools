@@ -1268,9 +1268,9 @@ class Privileges(object):
     def local_admin_outbound(self, sheet):
         list_query = """MATCH (u {domain:{domain}})
 							WITH u
-							OPTIONAL MATCH (u)-[r:AdminTo]->(c:Computer)
+							OPTIONAL MATCH (u)-[r:AdminTo]->(c:Computer {domain:{domain}})
 							WITH u,COUNT(c) as expAdmin
-							OPTIONAL MATCH (u)-[r:MemberOf*1..]->(g:Group)-[r2:AdminTo]->(c:Computer)
+							OPTIONAL MATCH (u)-[r:MemberOf*1..]->(g:Group)-[r2:AdminTo]->(c:Computer {domain:{domain}})
 							WHERE NOT (u)-[:AdminTo]->(c)
 							WITH u,expAdmin,COUNT(DISTINCT(c)) as unrolledAdmin
 							RETURN u.name,expAdmin + unrolledAdmin as totalAdmin
@@ -1289,8 +1289,8 @@ class Privileges(object):
 
     def local_admin_inbound(self, sheet):
         list_query = """MATCH (c:Computer {domain:{domain}})
-							OPTIONAL MATCH (u1 {domain:{domain}})-[:AdminTo]->(c)
-							OPTIONAL MATCH (u2 {domain:{domain}})-[:MemberOf*1..]->(:Group)-[:AdminTo]->(c)
+							OPTIONAL MATCH (u1)-[:AdminTo]->(c)
+							OPTIONAL MATCH (u2)-[:MemberOf*1..]->(:Group)-[:AdminTo]->(c)
 							WITH COLLECT(u1) + COLLECT(u2) as tempVar,c
 							UNWIND tempVar as admins
 							WITH c,COUNT(DISTINCT(admins)) as adminCount
@@ -1352,7 +1352,7 @@ class Kerberos(object):
 
     def write_column_data(self, sheet, title, results):
         count = len(results)
-        offset = 1
+        offset = 4
         font = styles.Font(bold=True)
         c = sheet.cell(offset, self.col_count)
         c.font = font
@@ -1366,9 +1366,19 @@ class Kerberos(object):
 
     def do_kerberos_delegation(self):
         func_list = [
-            self.unconstrained, self.allow_to_delegation
+            self.unconstrained, self.allow_to_delegation, self.shortest_path_domain_users,
+            self.shortest_path_everyone, self.shortest_path_auth_users,
         ]
         sheet = self.workbook._sheets[5]
+        self.write_single_cell(
+            sheet, 1, 1, "Domain Users to Unconstrained System")
+        self.write_single_cell(sheet, 1, 2, "Everyone to Unconstrained System")
+        self.write_single_cell(
+            sheet, 1, 3, "Authenticated Users to Unconstrained System")
+        font = styles.Font(bold=True)
+        sheet.cell(1, 1).font = font
+        sheet.cell(1, 2).font = font
+        sheet.cell(1, 3).font = font
 
         for f in func_list:
             s = timer()
@@ -1376,8 +1386,10 @@ class Kerberos(object):
             print "{} completed in {}s".format(f.__name__, timer() - s)
 
     def unconstrained(self, sheet):
-        list_query = """MATCH (c:Computer {domain:{domain},enabled: True})
-                            WHERE c.unconstraineddelegation = True
+        list_query = """MATCH (g:Group {domain: {domain}})
+                            WHERE g.objectsid =~ "(?i)S-1-5.*-516"
+                            MATCH (c:Computer {unconstraineddelegation: True,enabled: True,domain: {domain}})
+                            WHERE NOT (c)-[:MemberOf]->(g)
                             RETURN c.name
 							"""
         session = self.driver.session()
@@ -1393,7 +1405,7 @@ class Kerberos(object):
     def allow_to_delegation(self, sheet):
         list_query = """MATCH (n:User {domain: {domain}})
                             WHERE n.sensitive = false
-                            MATCH (n)-[r:MemberOf*1..]->(g:Group {highvalue: True})
+                            MATCH (n)-[r:MemberOf*1..]->(g:Group {highvalue: True,domain: {domain}})
                             RETURN DISTINCT n.name
                             ORDER BY n.name ASC
 							"""
@@ -1405,7 +1417,61 @@ class Kerberos(object):
 
         session.close()
         self.write_column_data(
-            sheet, "Sensitive HighValue Users: {}", results)
+            sheet, "Sensitive High Value Users: {}", results)
+
+    def shortest_path_domain_users(self, sheet):
+        count_query = """MATCH (g1:Group {domain:{domain}})
+						WHERE g1.objectsid ENDS WITH "-513"
+						MATCH (c:Computer {domain:{domain}})
+                        WHERE c.unconstraineddelegation = True
+						MATCH p = shortestPath((g1)-[r:MemberOf|HasSession|AdminTo|AllExtendedRights|AddMember|ForceChangePassword|GenericAll|GenericWrite|Owns|WriteDacl|WriteOwner|CanRDP|ExecuteDCOM|AllowedToDelegate|ReadLAPSPassword|Contains|GpLink|AddAllowedToAct|AllowedToAct*1..]->(c))
+						RETURN LENGTH(p)
+						"""
+
+        session = self.driver.session()
+        count = 0
+        for result in session.run(count_query, domain=self.domain):
+            count = result[0]
+
+        session.close()
+        self.write_single_cell(
+            sheet, 2, 1, "Shortest Path Length: {}".format(count))
+
+    def shortest_path_everyone(self, sheet):
+        count_query = """MATCH (g1:Group {domain:{domain}})
+						WHERE g1.objectsid = 'S-1-1-0'
+						MATCH (c:Computer {domain:{domain}})
+                        WHERE c.unconstraineddelegation = True
+						MATCH p = shortestPath((g1)-[r:MemberOf|HasSession|AdminTo|AllExtendedRights|AddMember|ForceChangePassword|GenericAll|GenericWrite|Owns|WriteDacl|WriteOwner|CanRDP|ExecuteDCOM|AllowedToDelegate|ReadLAPSPassword|Contains|GpLink|AddAllowedToAct|AllowedToAct*1..]->(c))
+						RETURN LENGTH(p)
+						"""
+
+        session = self.driver.session()
+        count = 0
+        for result in session.run(count_query, domain=self.domain):
+            count = result[0]
+
+        session.close()
+        self.write_single_cell(
+            sheet, 2, 2, "Shortest Path Length: {}".format(count))
+
+    def shortest_path_auth_users(self, sheet):
+        count_query = """MATCH (g1:Group {domain:{domain}})
+						WHERE g1.objectsid = 'S-1-5-11'
+						MATCH (c:Computer {domain:{domain}})
+                        WHERE c.unconstraineddelegation = True
+						MATCH p = shortestPath((g1)-[r:MemberOf|HasSession|AdminTo|AllExtendedRights|AddMember|ForceChangePassword|GenericAll|GenericWrite|Owns|WriteDacl|WriteOwner|CanRDP|ExecuteDCOM|AllowedToDelegate|ReadLAPSPassword|Contains|GpLink|AddAllowedToAct|AllowedToAct*1..]->(c))
+						RETURN LENGTH(p)
+						"""
+
+        session = self.driver.session()
+        count = 0
+        for result in session.run(count_query, domain=self.domain):
+            count = result[0]
+
+        session.close()
+        self.write_single_cell(
+            sheet, 2, 3, "Shortest Path Length: {}".format(count))
 
 
 class MainMenu(cmd.Cmd):
