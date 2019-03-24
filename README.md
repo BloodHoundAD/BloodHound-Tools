@@ -5,6 +5,7 @@
     Legacy Systems added to Low Hanging Fruit
     Foreign sessions added to Cross Domain Attack
     Added section High Privileges for local admin, session, DA and High Value group members
+    Added section Kerberos Delegation for unconstrained systems and Sensitive High Value users
     
     Bug fixes imported from pull request
 
