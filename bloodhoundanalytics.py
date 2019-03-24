@@ -1405,7 +1405,7 @@ class Kerberos(object):
 
         session.close()
         self.write_column_data(
-            sheet, "Allow to Delegate HighValue Users: {}", results)
+            sheet, "Sensitive HighValue Users: {}", results)
 
 
 class MainMenu(cmd.Cmd):
