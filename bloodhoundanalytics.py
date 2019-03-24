@@ -1266,7 +1266,7 @@ class Privileges(object):
             sheet, "High Value Group members: {}", results)
 
     def local_admin_outbound(self, sheet):
-        list_query = """MATCH (u:User {domain:{domain}})
+        list_query = """MATCH (u {domain:{domain}})
 							WITH u
 							OPTIONAL MATCH (u)-[r:AdminTo]->(c:Computer)
 							WITH u,COUNT(c) as expAdmin
@@ -1289,8 +1289,8 @@ class Privileges(object):
 
     def local_admin_inbound(self, sheet):
         list_query = """MATCH (c:Computer {domain:{domain}})
-							OPTIONAL MATCH (u1:User {domain:{domain}})-[:AdminTo]->(c)
-							OPTIONAL MATCH (u2:User {domain:{domain},enabled:true})-[:MemberOf*1..]->(:Group)-[:AdminTo]->(c)
+							OPTIONAL MATCH (u1 {domain:{domain}})-[:AdminTo]->(c)
+							OPTIONAL MATCH (u2 {domain:{domain}})-[:MemberOf*1..]->(:Group)-[:AdminTo]->(c)
 							WITH COLLECT(u1) + COLLECT(u2) as tempVar,c
 							UNWIND tempVar as admins
 							WITH c,COUNT(DISTINCT(admins)) as adminCount
@@ -1341,6 +1341,71 @@ class Privileges(object):
         session.close()
         self.write_column_data(
             sheet, "Top 100 Users with most sessions: {}", results)
+
+
+class Kerberos(object):
+    def __init__(self, driver, domain, workbook):
+        self.driver = driver
+        self.domain = domain
+        self.col_count = 1
+        self.workbook = workbook
+
+    def write_column_data(self, sheet, title, results):
+        count = len(results)
+        offset = 1
+        font = styles.Font(bold=True)
+        c = sheet.cell(offset, self.col_count)
+        c.font = font
+        sheet.cell(offset, self.col_count, value=title.format(count))
+        for i in xrange(0, count):
+            sheet.cell(i + offset + 1, self.col_count, value=results[i])
+        self.col_count += 1
+
+    def write_single_cell(self, sheet, row, column, text):
+        sheet.cell(row, column, value=text)
+
+    def do_kerberos_delegation(self):
+        func_list = [
+            self.unconstrained, self.allow_to_delegation
+        ]
+        sheet = self.workbook._sheets[5]
+
+        for f in func_list:
+            s = timer()
+            f(sheet)
+            print "{} completed in {}s".format(f.__name__, timer() - s)
+
+    def unconstrained(self, sheet):
+        list_query = """MATCH (c:Computer {domain:{domain},enabled: True})
+                            WHERE c.unconstraineddelegation = True
+                            RETURN c.name
+							"""
+        session = self.driver.session()
+        results = []
+
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
+
+        session.close()
+        self.write_column_data(
+            sheet, "Unconstrained systems: {}", results)
+
+    def allow_to_delegation(self, sheet):
+        list_query = """MATCH (n:User {domain: {domain}})
+                            WHERE n.sensitive = false
+                            MATCH (n)-[r:MemberOf*1..]->(g:Group {highvalue: True})
+                            RETURN DISTINCT n.name
+                            ORDER BY n.name ASC
+							"""
+        session = self.driver.session()
+        results = []
+
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
+
+        session.close()
+        self.write_column_data(
+            sheet, "Allow to Delegate HighValue Users: {}", results)
 
 
 class MainMenu(cmd.Cmd):
@@ -1476,6 +1541,12 @@ class MainMenu(cmd.Cmd):
         print ""
         self.privilege.do_high_privileges()
         print ""
+        print "----------------------------------"
+        print "Generating Kerberos Delegation"
+        print "----------------------------------"
+        print ""
+        self.delegation.do_kerberos_delegation()
+        print ""
         print "Analytics Complete! Saving workbook to {}".format(self.filename)
         self.save_workbook()
 
@@ -1485,6 +1556,7 @@ class MainMenu(cmd.Cmd):
         self.front = FrontPage(self.driver, self.domain, self.workbook)
         self.cross = CrossDomain(self.driver, self.domain, self.workbook)
         self.privilege = Privileges(self.driver, self.domain, self.workbook)
+        self.delegation = Kerberos(self.driver, self.domain, self.workbook)
         self.save_workbook()
 
     def create_workbook(self):
@@ -1495,6 +1567,7 @@ class MainMenu(cmd.Cmd):
         wb.create_sheet(title="Low Hanging Fruit")
         wb.create_sheet(title="Cross Domain Attacks")
         wb.create_sheet(title="High Privileges")
+        wb.create_sheet(title="Kerberos Delegation")
         self.workbook = wb
 
     def save_workbook(self):
