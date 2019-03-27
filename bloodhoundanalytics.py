@@ -106,6 +106,10 @@ class FrontPage(object):
 
 	def create_qa_statistics(self, sheet):
 		session = self.driver.session()
+		computer_local_admin_pct = 0
+		computer_session_pct = 0
+		user_session_pct = 0
+		
 		query = """MATCH (n)-[:AdminTo]->(c:Computer {domain:{domain}})
 					WITH COUNT(DISTINCT(c)) as computersWithAdminsCount
 					MATCH (c2:Computer {domain:{domain}})
