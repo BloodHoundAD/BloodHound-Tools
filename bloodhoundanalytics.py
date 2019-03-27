@@ -1090,6 +1090,10 @@ class MainMenu(cmd.Cmd):
 		self.connected = False
 		self.num_nodes = 500
 		self.filename = "BloodHoundAnalytics.xlsx"
+		if (len(sys.argv) < 2):
+			print "No domain specified."
+			print "Usage: python {} DOMAINNAME".format(sys.argv[0])
+			sys.exit()
 		self.domain = sys.argv[1]
 		self.domain_validated = False
 
