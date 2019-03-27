@@ -4,6 +4,7 @@
 # 	dbconfig - Set the credentials and URL for the database you're connecting too
 #	connect - Connects to the database using supplied credentials
 # 	setnodes - Set the number of nodes to generate (defaults to 500, this is a safe number!)
+# 	setdomain - Set the domain name
 # 	cleardb - Clears the database and sets the schema properly
 #	generate - Generates random data in the database
 #	clear_and_generate - Connects to the database, clears the DB, sets the schema, and generates random data
@@ -38,6 +39,7 @@ class MainMenu(cmd.Cmd):
 		self.driver = None
 		self.connected = False
 		self.num_nodes = 500
+		self.domain = "TESTLAB.LOCAL"
 		self.current_time = int(time.time())
 		self.base_sid = "S-1-5-21-883232822-274137685-4173207997"
 		with open('first.pkl', 'rb') as f:
@@ -68,6 +70,9 @@ class MainMenu(cmd.Cmd):
 	def help_setnodes(self):
 		print "Set base number of nodes to generate (default 500)"
 
+	def help_setdomain(self):
+		print "Set domain name (default 'TESTLAB.LOCAL')"
+		
 	def help_cleardb(self):
 		print "Clear the database and set constraints"
 
@@ -109,6 +114,20 @@ class MainMenu(cmd.Cmd):
 
 		self.num_nodes = int(self.m.input_default("Number of nodes of each type to generate", self.num_nodes))
 
+	def do_setdomain(self, args):
+		passed = args
+		if passed != "":
+			try:
+				self.domain = passed.upper()
+				return
+			except ValueError:
+				pass
+
+		self.domain = self.m.input_default("Domain", self.domain).upper()
+		print ""
+		print "New Settings:"
+		print "Domain: {}".format(self.domain)
+	
 	def do_exit(self, args):
 		raise KeyboardInterrupt
 
@@ -202,72 +221,92 @@ class MainMenu(cmd.Cmd):
 		print "Starting data generation with nodes={}".format(self.num_nodes)
 
 		print "Populating Standard Nodes"
-		session.run("MERGE (n:Group {name:'DOMAIN ADMINS@TESTLAB.LOCAL'}) SET n.highvalue=true,n.objectsid={sid}", sid=self.base_sid + "-512")
-		session.run("MERGE (n:Group {name:'DOMAIN COMPUTERS@TESTLAB.LOCAL'})")
-		session.run("MERGE (n:Group {name:'DOMAIN USERS@TESTLAB.LOCAL'})")
-		session.run("MERGE (n:Group {name:'DOMAIN CONTROLLERS@TESTLAB.LOCAL'}) SET n.highvalue=true")
-		session.run("MERGE (n:Group {name:'ENTERPRISE DOMAIN CONTROLLERS@TESTLAB.LOCAL'}) SET n.highvalue=true")
-		session.run("MERGE (n:Group {name:'ENTERPRISE READ-ONLY DOMAIN CONTROLLERS@TESTLAB.LOCAL'})")
-		session.run("MERGE (n:Group {name:'ADMINISTRATORS@TESTLAB.LOCAL'}) SET n.highvalue=true")
-		session.run("MERGE (n:Group {name:'ENTERPRISE ADMINS@TESTLAB.LOCAL'}) SET n.highvalue=true")
-		session.run("MERGE (n:Domain {name:'TESTLAB.LOCAL'})")
+		group_name = "DOMAIN ADMINS@{}".format(self.domain)
+		session.run("MERGE (n:Group {name:{gname}}) SET n.highvalue=true,n.objectsid={sid}", sid=self.base_sid + "-512", gname=group_name)
+		group_name = "DOMAIN COMPUTERS@{}".format(self.domain)
+		session.run("MERGE (n:Group {name:{gname}})", gname=group_name)
+		group_name = "DOMAIN USERS@{}".format(self.domain)
+		session.run("MERGE (n:Group {name:{gname}})", gname=group_name)
+		group_name = "DOMAIN CONTROLLERS@{}".format(self.domain)
+		session.run("MERGE (n:Group {name:{gname}}) SET n.highvalue=true", gname=group_name)
+		group_name = "ENTERPRISE DOMAIN CONTROLLERS@{}".format(self.domain)
+		session.run("MERGE (n:Group {name:{gname}}) SET n.highvalue=true", gname=group_name)
+		group_name = "ENTERPRISE READ-ONLY DOMAIN CONTROLLERS@{}".format(self.domain)
+		session.run("MERGE (n:Group {name:{gname}})", gname=group_name)
+		group_name = "ADMINISTRATORS@{}".format(self.domain)
+		session.run("MERGE (n:Group {name:{gname}}) SET n.highvalue=true", gname=group_name)
+		group_name = "ENTERPRISE ADMINS@{}".format(self.domain)
+		session.run("MERGE (n:Group {name:{gname}}) SET n.highvalue=true", gname=group_name)
+		session.run("MERGE (n:Domain {name:{domain}})", domain=self.domain)
 		ddp = str(uuid.uuid4())
 		ddcp = str(uuid.uuid4())
 		dcou = str(uuid.uuid4())
-		session.run("MERGE (n:GPO {name:'DEFAULT DOMAIN POLICY@TESTLAB.LOCAL', guid:{guid}})", guid=ddp)
-		session.run("MERGE (n:GPO {name:'DEFAULT DOMAIN CONTROLLERS POLICY@TESTLAB.LOCAL', guid:{guid}})", guid=ddcp)
-		session.run("MERGE (n:OU {name:'DOMAIN CONTROLLERS@TESTLAB.LOCAL', guid:{guid}, blocksInheritance: false})", guid=dcou)
+		gpo_name = "DEFAULT DOMAIN POLICY@{}".format(self.domain)
+		session.run("MERGE (n:GPO {name:{gpo}, guid:{guid}})", gpo=gpo_name, guid=ddp)
+		gpo_name = "DEFAULT DOMAIN CONTROLLERS POLICY@{}".format(self.domain)
+		session.run("MERGE (n:GPO {name:{gpo}, guid:{guid}})", gpo=gpo_name, guid=ddcp)
+		ou_name = "DOMAIN CONTROLLERS@{}".format(self.domain)
+		session.run("MERGE (n:OU {name:{ou}, guid:{guid}, blocksInheritance: false})", ou=ou_name, guid=dcou)
 		
 
 		print "Adding Standard Edges"
 		
 		#Default GPOs
-		session.run('MERGE (n:GPO {name:"DEFAULT DOMAIN POLICY@TESTLAB.LOCAL"}) MERGE (m:Domain {name:"TESTLAB.LOCAL"}) MERGE (n)-[:GpLink {isacl:false, enforced:toBoolean(false)}]->(m)')
-		session.run('MERGE (n:Domain {name:"TESTLAB.LOCAL"}) MERGE (m:OU {guid:{guid}}) MERGE (n)-[:Contains {isacl:false}]->(m)', guid=dcou)
-		session.run('MERGE (n:GPO {name:"DEFAULT DOMAIN CONTROLLERS POLICY@TESTLAB.LOCAL"}) MERGE (m:OU {guid:{guid}}) MERGE (n)-[:GpLink {isacl:false, enforced:toBoolean(false)}]->(m)', guid=dcou)
+		gpo_name = "DEFAULT DOMAIN POLICY@{}".format(self.domain)
+		session.run('MERGE (n:GPO {name:{gpo}}) MERGE (m:Domain {name:{domain}}) MERGE (n)-[:GpLink {isacl:false, enforced:toBoolean(false)}]->(m)', gpo=gpo_name, domain=self.domain)
+		session.run('MERGE (n:Domain {name:{domain}}) MERGE (m:OU {guid:{guid}}) MERGE (n)-[:Contains {isacl:false}]->(m)', domain=self.domain, guid=dcou)
+		gpo_name = "DEFAULT DOMAIN CONTROLLERS POLICY@{}".format(self.domain)
+		session.run('MERGE (n:GPO {name:"DEFAULT DOMAIN CONTROLLERS POLICY@{domain}"}) MERGE (m:OU {guid:{guid}}) MERGE (n)-[:GpLink {isacl:false, enforced:toBoolean(false)}]->(m)', domain=self.domain, guid=dcou)
 
 		#Ent Admins -> Domain Node
+		group_name = "ENTERPRISE ADMINS@{}".format(self.domain)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) MERGE (m:Group {name:"ENTERPRISE ADMINS@TESTLAB.LOCAL"}) MERGE (m)-[:GenericAll {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) MERGE (m:Group {name:{gname}}) MERGE (m)-[:GenericAll {isacl:true}]->(n)', domain=self.domain, gname=group_name)
 		
 		#Administrators -> Domain Node
+		group_name = "ADMINISTRATORS@{}".format(self.domain)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) MERGE (m)-[:Owns {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) MERGE (m:Group {name:{gname}}) MERGE (m)-[:Owns {isacl:true}]->(n)', domain=self.domain, gname=group_name)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:WriteOwner {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:WriteOwner {isacl:true}]->(n)', domain=self.domain, gname=group_name)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:WriteDacl {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:WriteDacl {isacl:true}]->(n)', domain=self.domain, gname=group_name)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:DCSync {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:DCSync {isacl:true}]->(n)', domain=self.domain, gname=group_name)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChanges {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:GetChanges {isacl:true}]->(n)', domain=self.domain, gname=group_name)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ADMINISTRATORS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChangesAll {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:GetChangesAll {isacl:true}]->(n)', domain=self.domain, gname=group_name)
 		
 		#Domain Admins -> Domain Node
+		group_name = "DOMAIN ADMINS@{}".format(self.domain)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:WriteOwner {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:WriteOwner {isacl:true}]->(n)', domain=self.domain, gname=group_name)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:WriteDacl {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:WriteDacl {isacl:true}]->(n)', domain=self.domain, gname=group_name)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:DCSync {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:DCSync {isacl:true}]->(n)', domain=self.domain, gname=group_name)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChanges {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:GetChanges {isacl:true}]->(n)', domain=self.domain, gname=group_name)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChangesAll {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:GetChangesAll {isacl:true}]->(n)', domain=self.domain, gname=group_name)
 		
 		#DC Groups -> Domain Node
+		group_name = "ENTERPRISE DOMAIN CONTROLLERS@{}".format(self.domain)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ENTERPRISE DOMAIN CONTROLLERS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChanges {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:GetChanges {isacl:true}]->(n)', domain=self.domain, gname=group_name)
+		group_name = "ENTERPRISE READ-ONLY DOMAIN CONTROLLERS@{}".format(self.domain)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"ENTERPRISE READ-ONLY DOMAIN CONTROLLERS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChanges {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:GetChanges {isacl:true}]->(n)', domain=self.domain, gname=group_name)
+		group_name = "DOMAIN CONTROLLERS@{}".format(self.domain)
 		session.run(
-			'MERGE (n:Domain {name:"TESTLAB.LOCAL"}) WITH n MERGE (m:Group {name:"DOMAIN CONTROLLERS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:GetChangesAll {isacl:true}]->(n)')
+			'MERGE (n:Domain {name:{domain}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:GetChangesAll {isacl:true}]->(n)', domain=self.domain, gname=group_name)
 
 		print "Generating Computer Nodes"
+		group_name = "DOMAIN COMPUTERS@{}".format(self.domain)
 		props = []
 		for i in xrange(1,self.num_nodes+1):
-			comp_name = "COMP{:05d}.TESTLAB.LOCAL".format(i)
+			comp_name = "COMP{:05d}.{}".format(i, self.domain)
 			computers.append(comp_name)
 			os = random.choice(os_list)
 			enabled = True
@@ -277,31 +316,39 @@ class MainMenu(cmd.Cmd):
 			}})
 
 			if (len(props) > 500):
-				session.run('UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) SET n += prop.props WITH n MERGE (m:Group {name:"DOMAIN COMPUTERS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
+				session.run('UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) SET n += prop.props WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
 				props = []
-		session.run('UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) WITH n MERGE (m:Group {name:"DOMAIN COMPUTERS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
+		session.run('UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
 
 		print "Creating Domain Controllers"
 		for state in states:
-			comp_name = "{}LABDC.TESTLAB.LOCAL".format(state)
+			comp_name = "{}LABDC." + self.domain
+			comp_name = comp_name.format(state)
+			group_name = "DOMAIN CONTROLLERS@{}".format(self.domain)
 			session.run(
-				'MERGE (n:Computer {name:{name}}) WITH n MERGE (m:Group {name:"DOMAIN CONTROLLERS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', name=comp_name)
+				'MERGE (n:Computer {name:{name}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (n)-[:MemberOf]->(m)', name=comp_name, gname=group_name)
+			ou_name = "DOMAIN CONTROLLERS@{}".format(self.domain)
 			session.run(
-				'MERGE (n:Computer {name:{name}}) WITH n MATCH (m:OU {name:"DOMAIN CONTROLLERS@TESTLAB.LOCAL",guid:{dcou}}) WITH n,m MERGE (m)-[:Contains]->(n)', name=comp_name, dcou=dcou)
+				'MERGE (n:Computer {name:{name}}) WITH n MATCH (m:OU {name:{ou},guid:{dcou}}) WITH n,m MERGE (m)-[:Contains]->(n)', name=comp_name, ou=ou_name, dcou=dcou)
+			group_name = "ENTERPRISE DOMAIN CONTROLLERS@{}".format(self.domain)
 			session.run(
-				'MERGE (n:Computer {name:{name}}) WITH n MERGE (m:Group {name:"ENTERPRISE DOMAIN CONTROLLERS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', name=comp_name)
+				'MERGE (n:Computer {name:{name}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (n)-[:MemberOf]->(m)', name=comp_name, gname=group_name)
+			group_name = "DOMAIN ADMINS@{}".format(self.domain)
 			session.run(
-				'MERGE (n:Computer {name:{name}}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:AdminTo]->(n)', name=comp_name)
+				'MERGE (n:Computer {name:{name}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:AdminTo]->(n)', name=comp_name, gname=group_name)
 
 		
 		used_states = list(set(used_states))
 
 		print "Generating User Nodes"
+		current_time = int(time.time())
+		group_name = "DOMAIN USERS@{}".format(self.domain)
 		props = []
 		for i in xrange(1, self.num_nodes+1):
 			first = random.choice(self.first_names)
 			last = random.choice(self.last_names)
-			user_name = "{}{}{:05d}@TESTLAB.LOCAL".format(first[0], last,i).upper()
+			user_name = "{}{}{:05d}@{}".format(first[0], last,i, self.domain).upper()
+			user_name = user_name.format(first[0], last,i).upper()
 			users.append(user_name)
 			dispname = "{} {}".format(first,last)
 			enabled = True
@@ -319,10 +366,11 @@ class MainMenu(cmd.Cmd):
 			}})
 			if (len(props) > 500):
 				session.run(
-					'UNWIND {props} as prop MERGE (n:User {name:prop.name}) SET n += prop.props WITH n MERGE (m:Group {name:"DOMAIN USERS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
+					'UNWIND {props} as prop MERGE (n:User {name:prop.name}) SET n += prop.props WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
 				props = []
+				
 		session.run(
-			'UNWIND {props} as prop MERGE (n:User {name:prop.name}) SET n += prop.props WITH n MERGE (m:Group {name:"DOMAIN USERS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
+			'UNWIND {props} as prop MERGE (n:User {name:prop.name}) SET n += prop.props WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
 
 		
 		print "Generating Group Nodes"
@@ -330,7 +378,7 @@ class MainMenu(cmd.Cmd):
 		props = []
 		for i in xrange(1, self.num_nodes + 1):
 			dept = random.choice(weighted_parts)
-			group_name = "{}{:05d}@TESTLAB.LOCAL".format(dept,i)
+			group_name = "{}{:05d}@{}".format(dept, i, self.domain)
 			groups.append(group_name)
 			props.append({'name':group_name})
 			if len(props) > 500:
@@ -342,14 +390,15 @@ class MainMenu(cmd.Cmd):
 		
 		print "Adding Domain Admins to Local Admins of Computers"
 		props = []
+		group_name = "DOMAIN ADMINS@{}".format(self.domain)
 		for comp in computers:
 			props.append({'name':comp})
 			if len(props) > 500:
-				session.run('UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:AdminTo]->(n)', props=props)
+				session.run('UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:AdminTo]->(n)', props=props, gname=group_name)
 				props = []
 		
 		session.run(
-			'UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:AdminTo]->(n)', props=props)
+			'UNWIND {props} as prop MERGE (n:Computer {name:prop.name}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (m)-[:AdminTo]->(n)', props=props, gname=group_name)
 		
 		dapctint = random.randint(3,5)
 		dapct = float(dapctint) / 100
@@ -357,9 +406,10 @@ class MainMenu(cmd.Cmd):
 		danum = min([danum, 30])
 		print "Creating {} Domain Admins ({}% of users capped at 30)".format(danum, dapctint)
 		das = random.sample(users, danum)
+		group_name = "DOMAIN ADMINS@{}".format(self.domain)
 		for da in das:
 			session.run(
-				'MERGE (n:User {name:{name}}) WITH n MERGE (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH n,m MERGE (n)-[:MemberOf]->(m)', name=da)
+				'MERGE (n:User {name:{name}}) WITH n MERGE (m:Group {name:{gname}}) WITH n,m MERGE (n)-[:MemberOf]->(m)', name=da, gname=group_name)
 
 		print "Applying random group nesting"
 		max_nest = int(round(math.log10(self.num_nodes)))
@@ -541,33 +591,34 @@ class MainMenu(cmd.Cmd):
 		session.run('UNWIND {props} AS prop MERGE (n:User {name:prop.a}) WITH n,prop MERGE (m:Computer {name:prop.b}) WITH n,m MERGE (m)-[:HasSession]->(n)', props=props)
 
 		print "Adding Domain Admin ACEs"
+		group_name = "DOMAIN ADMINS@{}".format(self.domain)
 		props = []
 		for x in computers:
 			props.append({'name':x})
 
 			if len(props) > 500:
-				session.run('UNWIND {props} as prop MATCH (n:Computer {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props)
+				session.run('UNWIND {props} as prop MATCH (n:Computer {name:prop.name}) WITH n MATCH (m:Group {name:{gname}}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
 				props = []
 		
-		session.run('UNWIND {props} as prop MATCH (n:Computer {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props)
+		session.run('UNWIND {props} as prop MATCH (n:Computer {name:prop.name}) WITH n MATCH (m:Group {name:{gname}}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
 
 		for x in users:
 			props.append({'name':x})
 
 			if len(props) > 500:
-				session.run('UNWIND {props} as prop MATCH (n:User {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props)
+				session.run('UNWIND {props} as prop MATCH (n:User {name:prop.name}) WITH n MATCH (m:Group {name:{gname}}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
 				props = []
 		
-		session.run('UNWIND {props} as prop MATCH (n:User {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props)
+		session.run('UNWIND {props} as prop MATCH (n:User {name:prop.name}) WITH n MATCH (m:Group {name:{gname}}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
 
 		for x in groups:
 			props.append({'name':x})
 
 			if len(props) > 500:
-				session.run('UNWIND {props} as prop MATCH (n:Group {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props)
+				session.run('UNWIND {props} as prop MATCH (n:Group {name:prop.name}) WITH n MATCH (m:Group {name:{gname}}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
 				props = []
 		
-		session.run('UNWIND {props} as prop MATCH (n:Group {name:prop.name}) WITH n MATCH (m:Group {name:"DOMAIN ADMINS@TESTLAB.LOCAL"}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props)
+		session.run('UNWIND {props} as prop MATCH (n:Group {name:prop.name}) WITH n MATCH (m:Group {name:{gname}}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
 
 		print "Creating OUs"
 		temp_comps = computers
@@ -578,7 +629,7 @@ class MainMenu(cmd.Cmd):
 		for i in xrange(0, 10):
 			state = states[i]
 			ou_comps = split_comps[i]
-			ouname = "{}_COMPUTERS@TESTLAB.LOCAL".format(state)
+			ouname = "{}_COMPUTERS@{}".format(state, self.domain)
 			guid = str(uuid.uuid4())
 			ou_guid_map[ouname] = guid
 			for c in ou_comps:
@@ -597,7 +648,7 @@ class MainMenu(cmd.Cmd):
 		for i in xrange(0, 10):
 			state = states[i]
 			ou_users = split_users[i]
-			ouname = "{}_USERS@TESTLAB.LOCAL".format(state)
+			ouname = "{}_USERS@{}".format(state, self.domain)
 			guid = str(uuid.uuid4())
 			ou_guid_map[ouname] = guid
 			for c in ou_users:
@@ -614,12 +665,12 @@ class MainMenu(cmd.Cmd):
 			guid = ou_guid_map[x]
 			props.append({'b':guid})
 		
-		session.run('UNWIND {props} as prop MERGE (n:OU {guid:prop.b}) WITH n MERGE (m:Domain {name:"TESTLAB.LOCAL"}) WITH n,m MERGE (m)-[:Contains]->(n)', props=props)
+		session.run('UNWIND {props} as prop MERGE (n:OU {guid:prop.b}) WITH n MERGE (m:Domain {name:{domain}}) WITH n,m MERGE (m)-[:Contains]->(n)', props=props, domain=self.domain)
 
 		print "Creating GPOs"
 
 		for i in xrange(1,20):
-			gpo_name = "TESTLAB_GPO_{}@TESTLAB.LOCAL".format(i)
+			gpo_name = "GPO_{}@{}".format(i, self.domain)
 			guid = str(uuid.uuid4())
 			session.run("MERGE (n:GPO {name:{gponame}}) SET n.guid={guid}", gponame=gpo_name, guid=guid)
 			gpos.append(gpo_name)
@@ -636,10 +687,10 @@ class MainMenu(cmd.Cmd):
 		linked_ous = random.sample(ou_names,num_links)
 		for l in linked_ous:
 			guid = ou_guid_map[l]
-			session.run("MERGE (n:Domain {name:{gponame}}) WITH n MERGE (m:OU {guid:{guid}}) WITH n,m MERGE (n)-[r:GpLink]->(m)", gponame="TESTLAB.LOCAL", guid=guid)
+			session.run("MERGE (n:Domain {name:{gponame}}) WITH n MERGE (m:OU {guid:{guid}}) WITH n,m MERGE (n)-[r:GpLink]->(m)", gponame=self.domain, guid=guid)
 
-		gpos.append("DEFAULT DOMAIN POLICY@TESTLAB.LOCAL")
-		gpos.append("DEFAULT DOMAIN CONTROLLER POLICY@TESTLAB.LOCAL")
+		gpos.append("DEFAULT DOMAIN POLICY@{}".format(self.domain))
+		gpos.append("DEFAULT DOMAIN CONTROLLER POLICY@{}".format(self.domain))
 
 		acl_list = ["GenericAll"] * 10 + ["GenericWrite"] * 15 + ["WriteOwner"] * 15 + ["WriteDacl"] * 15 + ["AddMember"] * 30 + ["ForceChangePassword"] * 15 + ["ReadLAPSPassword"] * 10
 
@@ -681,7 +732,7 @@ class MainMenu(cmd.Cmd):
 
 		session.run('MATCH (n:User) SET n.owned=false')
 		session.run('MATCH (n:Computer) SET n.owned=false')
-		session.run('MATCH (n) SET n.domain="TESTLAB.LOCAL"')
+		session.run('MATCH (n) SET n.domain={domain}', domain=self.domain)
 
 		print "Database Generation Finished!"
 
@@ -693,4 +744,3 @@ if __name__ == '__main__':
 	except KeyboardInterrupt:
 		print "Exiting"
 		sys.exit()
-
