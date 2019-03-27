@@ -1,4 +1,5 @@
 from openpyxl import Workbook, styles
+from openpyxl.utils import get_column_letter
 from neo4j.v1 import GraphDatabase
 import cmd
 import sys
@@ -1234,7 +1235,7 @@ class MainMenu(cmd.Cmd):
 		for worksheet in self.workbook._sheets:
 			for col in worksheet.columns:
 				max_length = 0
-				column = col[0].column  # Get the column name
+				column = get_column_letter(col[0].column)  # Get the column name
 				for cell in col:
 					try:  # Necessary to avoid error on empty cells
 						if len(str(cell.value)) > max_length:
