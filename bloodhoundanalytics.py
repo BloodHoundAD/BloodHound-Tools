@@ -1094,7 +1094,7 @@ class MainMenu(cmd.Cmd):
 			print "No domain specified."
 			print "Usage: python {} DOMAINNAME".format(sys.argv[0])
 			sys.exit()
-		self.domain = sys.argv[1]
+		self.domain = sys.argv[1].upper()
 		self.domain_validated = False
 
 		cmd.Cmd.__init__(self)
@@ -1111,7 +1111,7 @@ class MainMenu(cmd.Cmd):
 			print "No domain specified"
 			return
 		self.domain_validated = False
-		self.domain = args
+		self.domain = args.upper()
 		self.validate_domain()
 
 	def cmdloop(self):
