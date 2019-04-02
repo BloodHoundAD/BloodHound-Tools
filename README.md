@@ -1,11 +1,11 @@
 
 ### Changelist:
-    High Value List,Users and Computers % attack path to Domain Admin added to Overview
+    High Value List, % of Users and Computers that have attack path to Domain Admin added to Overview
     ACL privileges on Domain added to Critical Assets
     Legacy Systems added to Low Hanging Fruit
     Foreign sessions added to Cross Domain Attack
-    Added section for High Privileges view
-    Added section for Kerberos Delegation 
+    Added section for High Privileges
+    Added section for Kerberos
     
     Bug fixes imported from pull request
 
