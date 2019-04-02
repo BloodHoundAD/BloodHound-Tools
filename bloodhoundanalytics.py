@@ -228,10 +228,13 @@ class LowHangingFruit(object):
             self.domain_users_control, self.everyone_control, self.authenticated_users_control,
             self.domain_users_rdp, self.everyone_rdp, self.authenticated_users_dcom,
             self.domain_users_dcom, self.everyone_dcom, self.authenticated_users_dcom,
-            self.shortest_acl_path_domain_users, self.shortest_derivative_path_domain_users, self.shortest_hybrid_path_domain_users,
-            self.shortest_acl_path_everyone, self.shortest_derivative_path_everyone, self.shortest_hybrid_path_everyone,
-            self.shortest_acl_path_auth_users, self.shortest_derivative_path_auth_users, self.shortest_hybrid_path_auth_users,
-            self.kerberoastable_path_len, self.asreproastable_path_len, self.high_admin_comps, self.server_2003, self.server_2008
+            self.shortest_acl_path_domain_users, self.shortest_derivative_path_domain_users,
+            self.shortest_hybrid_path_domain_users, self.shortest_acl_path_everyone,
+            self.shortest_derivative_path_everyone, self.shortest_hybrid_path_everyone,
+            self.shortest_acl_path_auth_users, self.shortest_derivative_path_auth_users,
+            self.shortest_hybrid_path_auth_users, self.kerberoastable_path_len,
+            self.asreproastable_path_len, self.high_admin_comps, self.server_2003,
+            self.server_2008
         ]
         sheet = self.workbook._sheets[2]
         self.write_single_cell(sheet, 1, 1, "Domain Users to Domain Admins")
@@ -782,9 +785,10 @@ class CriticalAssets(object):
     def do_critical_asset_analysis(self):
         func_list = [
             self.admins_on_dc, self.rdp_on_dc, self.gpo_on_dc, self.admin_on_exch,
-            self.rdp_on_exch, self.gpo_on_exch, self.da_controllers, self.da_sessions,
-            self.gpo_on_da, self.da_equiv_controllers, self.da_equiv_sessions, self.gpo_on_da_equiv,
-            self.acl_domain]
+            self.rdp_on_exch, self.gpo_on_exch, self.da_controllers,
+            self.da_sessions, self.gpo_on_da, self.da_equiv_controllers,
+            self.da_equiv_sessions, self.gpo_on_da_equiv, self.acl_domain
+        ]
         sheet = self.workbook._sheets[1]
         for f in func_list:
             s = timer()
@@ -1110,8 +1114,8 @@ class CrossDomain(object):
 
     def do_cross_domain_analysis(self):
         func_list = [
-            self.foreign_admins, self.foreign_gpo_controllers, self.foreign_user_controllers,
-            self.foreign_session
+            self.foreign_admins, self.foreign_gpo_controllers,
+            self.foreign_user_controllers, self.foreign_session
         ]
         sheet = self.workbook._sheets[3]
 
@@ -1190,7 +1194,8 @@ class CrossDomain(object):
     def foreign_session(self, sheet):
         list_query = """MATCH (s:Computer {domain:{domain}})-[r:HasSession*1]->(t:User)
                         WHERE NOT s.domain = t.domain
-                        RETURN s.name, t.name
+                        RETURN s.name, COUNT(t) as count
+                        ORDER BY count DESC
                         """
 
         session = self.driver.session()
@@ -1227,8 +1232,9 @@ class Privileges(object):
 
     def do_high_privileges(self):
         func_list = [
-            self.da_members, self.high_value_members, self.local_admin_outbound,
-            self.local_admin_inbound, self.most_session_user, self.most_session_computer
+            self.da_members, self.high_value_members, self.user_local_admin,
+            self.groups_local_admin, self.local_admin_inbound,
+            self.most_session_user, self.most_session_computer, self.laps
         ]
         sheet = self.workbook._sheets[4]
 
@@ -1240,7 +1246,7 @@ class Privileges(object):
     def da_members(self, sheet):
         list_query = """MATCH (n:Group {domain:{domain}})
                             WHERE n.objectsid =~ "(?i)S-1-5.*-512" WITH n
-							MATCH (n)<-[r:MemberOf*1..]-(m)
+                            MATCH (n)<-[r:MemberOf*1..]-(m)
                             RETURN m.name
                             ORDER BY m.name ASC
                             """
@@ -1269,12 +1275,12 @@ class Privileges(object):
         self.write_column_data(
             sheet, "High Value Group members: {}", results)
 
-    def local_admin_outbound(self, sheet):
-        list_query = """MATCH (u {domain:{domain}})
+    def user_local_admin(self, sheet):
+        list_query = """MATCH (u:User {domain:{domain}})
                             WITH u
-                            OPTIONAL MATCH (u)-[r:AdminTo]->(c:Computer {domain:{domain}})
+                            OPTIONAL MATCH (u:User)-[r:AdminTo]->(c:Computer {domain:{domain}})
                             WITH u,COUNT(c) as expAdmin
-                            OPTIONAL MATCH (u)-[r:MemberOf*1..]->(g:Group)-[r2:AdminTo]->(c:Computer {domain:{domain}})
+                            OPTIONAL MATCH (u:User)-[r:MemberOf*1..]->(g:Group)-[r2:AdminTo]->(c:Computer {domain:{domain}})
                             WHERE NOT (u)-[:AdminTo]->(c)
                             WITH u,expAdmin,COUNT(DISTINCT(c)) as unrolledAdmin
                             RETURN u.name,expAdmin + unrolledAdmin as totalAdmin
@@ -1289,7 +1295,29 @@ class Privileges(object):
 
         session.close()
         self.write_column_data(
-            sheet, "Top 100 Local Admin Outbound: {}", results)
+            sheet, "Top 100 Users with Local Admin: {}", results)
+
+    def groups_local_admin(self, sheet):
+        list_query = """MATCH (u:Group {domain:{domain}})
+                            WITH u
+                            OPTIONAL MATCH (u:Group)-[r:AdminTo]->(c:Computer {domain:{domain}})
+                            WITH u,COUNT(c) as expAdmin
+                            OPTIONAL MATCH (u:Group)-[r:MemberOf*1..]->(g:Group)-[r2:AdminTo]->(c:Computer {domain:{domain}})
+                            WHERE NOT (u)-[:AdminTo]->(c)
+                            WITH u,expAdmin,COUNT(DISTINCT(c)) as unrolledAdmin
+                            RETURN u.name,expAdmin + unrolledAdmin as totalAdmin
+                            ORDER BY totalAdmin DESC
+                            LIMIT 100
+                            """
+        session = self.driver.session()
+        results = []
+
+        for result in session.run(list_query, domain=self.domain):
+            results.append("{} - {}".format(result[0], result[1]))
+
+        session.close()
+        self.write_column_data(
+            sheet, "Top 100 Groups with Local Admin: {}", results)
 
     def local_admin_inbound(self, sheet):
         list_query = """MATCH (c:Computer {domain:{domain}})
@@ -1346,8 +1374,23 @@ class Privileges(object):
         self.write_column_data(
             sheet, "Top 100 Users with most sessions: {}", results)
 
+    def laps(self, sheet):
+        list_query = """MATCH(n)-[:ReadLAPSPassword*1..]->(c:Computer {domain:{domain}})
+                        RETURN n.name, count(c) as count
+                        ORDER BY count DESC
+                        """
+        session = self.driver.session()
+        results = []
 
-class Kerberos(object):
+        for result in session.run(list_query, domain=self.domain):
+            results.append("{} - {}".format(result[0], result[1]))
+
+        session.close()
+        self.write_column_data(
+            sheet, "LAPS Rights: {}", results)
+
+
+class kerberos(object):
     def __init__(self, driver, domain, workbook):
         self.driver = driver
         self.domain = domain
@@ -1368,10 +1411,11 @@ class Kerberos(object):
     def write_single_cell(self, sheet, row, column, text):
         sheet.cell(row, column, value=text)
 
-    def do_kerberos_delegation(self):
+    def do_kerberos(self):
         func_list = [
-            self.unconstrained, self.allow_to_delegation, self.shortest_path_domain_users,
             self.shortest_path_everyone, self.shortest_path_auth_users,
+            self.shortest_path_domain_users, self.unconstrained,
+            self.allow_to_delegation, self.kerberoastable, self.asreproastable
         ]
         sheet = self.workbook._sheets[5]
         self.write_single_cell(
@@ -1388,40 +1432,6 @@ class Kerberos(object):
             s = timer()
             f(sheet)
             print "{} completed in {}s".format(f.__name__, timer() - s)
-
-    def unconstrained(self, sheet):
-        list_query = """MATCH (g:Group {domain: {domain}})
-                            WHERE g.objectsid =~ "(?i)S-1-5.*-516"
-                            MATCH (c:Computer {unconstraineddelegation: True,enabled: True,domain: {domain}})
-                            WHERE NOT (c)-[:MemberOf]->(g)
-                            RETURN c.name
-                            """
-        session = self.driver.session()
-        results = []
-
-        for result in session.run(list_query, domain=self.domain):
-            results.append(result[0])
-
-        session.close()
-        self.write_column_data(
-            sheet, "Unconstrained systems: {}", results)
-
-    def allow_to_delegation(self, sheet):
-        list_query = """MATCH (n:User {domain: {domain}})
-                            WHERE n.sensitive = false
-                            MATCH (n)-[r:MemberOf*1..]->(g:Group {highvalue: True,domain: {domain}})
-                            RETURN DISTINCT n.name
-                            ORDER BY n.name ASC
-                            """
-        session = self.driver.session()
-        results = []
-
-        for result in session.run(list_query, domain=self.domain):
-            results.append(result[0])
-
-        session.close()
-        self.write_column_data(
-            sheet, "Sensitive High Value Users: {}", results)
 
     def shortest_path_domain_users(self, sheet):
         count_query = """MATCH (g1:Group {domain:{domain}})
@@ -1474,6 +1484,71 @@ class Kerberos(object):
         session.close()
         self.write_single_cell(
             sheet, 2, 3, "Shortest Path Length: {}".format(count))
+
+    def unconstrained(self, sheet):
+        list_query = """MATCH (g:Group {domain: {domain}})
+                            WHERE g.objectsid =~ "(?i)S-1-5.*-516"
+                            MATCH (c:Computer {unconstraineddelegation: True,enabled: True,domain: {domain}})
+                            WHERE NOT (c)-[:MemberOf]->(g)
+                            RETURN c.name
+                            """
+        session = self.driver.session()
+        results = []
+
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
+
+        session.close()
+        self.write_column_data(
+            sheet, "Unconstrained systems: {}", results)
+
+    def allow_to_delegation(self, sheet):
+        list_query = """MATCH (n:User {domain: {domain}})
+                            WHERE n.sensitive = false
+                            MATCH (n)-[r:MemberOf*1..]->(g:Group {highvalue: True,domain: {domain}})
+                            RETURN DISTINCT n.name
+                            ORDER BY n.name ASC
+                            """
+        session = self.driver.session()
+        results = []
+
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
+
+        session.close()
+        self.write_column_data(
+            sheet, "Sensitive High Value Users: {}", results)
+
+    def kerberoastable(self, sheet):
+        list_query = """MATCH (u:User {domain:{domain},hasspn:true})
+                        WHERE NOT u.name STARTS WITH "KRBTGT@"
+                        RETURN u.name
+                        ORDER BY u.name DESC
+                        """
+
+        session = self.driver.session()
+        results = []
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
+
+        session.close()
+        self.write_column_data(
+            sheet, "Kerberoastable Users", results)
+
+    def asreproastable(self, sheet):
+        list_query = """MATCH (u:User {domain:{domain},dontreqpreauth:True})
+                        RETURN u.name
+                        ORDER BY u.name DESC
+                        """
+
+        session = self.driver.session()
+        results = []
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
+
+        session.close()
+        self.write_column_data(
+            sheet, "ASReproastable Users", results)
 
 
 class MainMenu(cmd.Cmd):
@@ -1614,10 +1689,10 @@ class MainMenu(cmd.Cmd):
         self.privilege.do_high_privileges()
         print ""
         print "----------------------------------"
-        print "Generating Kerberos Delegation"
+        print "Generating Kerberos"
         print "----------------------------------"
         print ""
-        self.delegation.do_kerberos_delegation()
+        self.kerb.do_kerberos()
         print ""
         print "Analytics Complete! Saving workbook to {}".format(self.filename)
         self.save_workbook()
@@ -1628,7 +1703,7 @@ class MainMenu(cmd.Cmd):
         self.front = FrontPage(self.driver, self.domain, self.workbook)
         self.cross = CrossDomain(self.driver, self.domain, self.workbook)
         self.privilege = Privileges(self.driver, self.domain, self.workbook)
-        self.delegation = Kerberos(self.driver, self.domain, self.workbook)
+        self.kerb = kerberos(self.driver, self.domain, self.workbook)
         self.save_workbook()
 
     def create_workbook(self):
@@ -1639,7 +1714,7 @@ class MainMenu(cmd.Cmd):
         wb.create_sheet(title="Low Hanging Fruit")
         wb.create_sheet(title="Cross Domain Attacks")
         wb.create_sheet(title="High Privileges")
-        wb.create_sheet(title="Kerberos Delegation")
+        wb.create_sheet(title="Kerberos")
         self.workbook = wb
 
     def save_workbook(self):
