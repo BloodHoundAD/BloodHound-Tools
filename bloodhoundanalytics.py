@@ -1415,7 +1415,8 @@ class kerberos(object):
         func_list = [
             self.shortest_path_everyone, self.shortest_path_auth_users,
             self.shortest_path_domain_users, self.unconstrained,
-            self.allow_to_delegation, self.kerberoastable, self.asreproastable
+            self.allow_to_delegation, self.kerberoastable, self.asreproastable,
+            self.ldap_delegation
         ]
         sheet = self.workbook._sheets[5]
         self.write_single_cell(
@@ -1549,6 +1550,22 @@ class kerberos(object):
         session.close()
         self.write_column_data(
             sheet, "ASReproastable Users", results)
+
+    def ldap_delegation(self, sheet):
+        list_query = """MATCH (n)-[:AllowedToDelegate]->(m {domain:{domain}})
+                        WITH DISTINCT(n) as object
+                        WHERE ANY (x IN object.allowedtodelegate WHERE x =~ "ldap/.*")
+                        RETURN object.name
+                        """
+
+        session = self.driver.session()
+        results = []
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
+
+        session.close()
+        self.write_column_data(
+            sheet, "AllowedDelegation to LDAP", results)
 
 
 class MainMenu(cmd.Cmd):
