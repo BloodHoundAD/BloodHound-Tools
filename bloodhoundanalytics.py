@@ -234,7 +234,7 @@ class LowHangingFruit(object):
             self.shortest_acl_path_auth_users, self.shortest_derivative_path_auth_users,
             self.shortest_hybrid_path_auth_users, self.kerberoastable_path_len,
             self.asreproastable_path_len, self.high_admin_comps, self.server_2003,
-            self.server_2008
+            self.server_2008, self.everyone_printspool
         ]
         sheet = self.workbook._sheets[2]
         self.write_single_cell(sheet, 1, 1, "Domain Users to Domain Admins")
@@ -763,6 +763,25 @@ class LowHangingFruit(object):
         self.write_column_data(
             sheet, "Windows Server 2008(Expire 2020): {}", results)
 
+    def everyone_printspool(self, sheet):
+        list_query = """OPTIONAL MATCH (c1:Computer)-[r1]->(c2:Computer {domain:{domain}})
+                        WHERE NOT c1 = c2
+                        OPTIONAL MATCH (c3:Computer)-[:MemberOf*1..]->(:Group)-[r2]->(c4:Computer {domain:{domain}})
+                        WHERE NOT c3 = c4
+                        WITH collect(c1) + collect(c3) AS temp
+                        UNWIND temp as computers
+                        RETURN DISTINCT(computers.name)
+                        ORDER BY computers.name ASC
+                        """
+
+        session = self.driver.session()
+        results = []
+
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
+
+        session.close()
+        self.write_column_data(sheet, "Everyone SpoolSample Relay: {}", results)
 
 class CriticalAssets(object):
     def __init__(self, driver, domain, workbook):
@@ -1088,7 +1107,7 @@ class CriticalAssets(object):
 
         session.close()
         self.write_column_data(
-            sheet, "Explicit ACL privileges on domain: {}", results)
+            sheet, "Explicit ACL on domain: {}", results)
 
 
 class CrossDomain(object):
@@ -1552,7 +1571,7 @@ class kerberos(object):
             sheet, "ASReproastable Users", results)
 
     def ldap_delegation(self, sheet):
-        list_query = """MATCH (n)-[:AllowedToDelegate]->(m {domain:{domain}})
+        list_query = """MATCH (n)-[:AllowedToDelegate|AllowedToDelegate*1..]->(m {domain:{domain}})
                         WITH DISTINCT(n) as object
                         WHERE ANY (x IN object.allowedtodelegate WHERE x =~ "ldap/.*")
                         RETURN object.name
