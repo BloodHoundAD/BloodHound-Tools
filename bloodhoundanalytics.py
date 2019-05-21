@@ -764,9 +764,9 @@ class LowHangingFruit(object):
             sheet, "Windows Server 2008(Expire 2020): {}", results)
 
     def everyone_printspool(self, sheet):
-        list_query = """OPTIONAL MATCH (c1:Computer)-[r1]->(c2:Computer {domain:{domain}})
+        list_query = """OPTIONAL MATCH (c1:Computer)-[r1:AdminTo*1..]->(c2:Computer {domain:{domain}})
                         WHERE NOT c1 = c2
-                        OPTIONAL MATCH (c3:Computer)-[:MemberOf*1..]->(:Group)-[r2]->(c4:Computer {domain:{domain}})
+                        OPTIONAL MATCH (c3:Computer)-[:MemberOf*1..]->(:Group)-[r2:AdminTo*1..]->(c4:Computer {domain:{domain}})
                         WHERE NOT c3 = c4
                         WITH collect(c1) + collect(c3) AS temp
                         UNWIND temp as computers
