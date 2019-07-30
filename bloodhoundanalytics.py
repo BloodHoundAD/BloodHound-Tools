@@ -234,13 +234,12 @@ class LowHangingFruit(object):
             self.shortest_acl_path_auth_users, self.shortest_derivative_path_auth_users,
             self.shortest_hybrid_path_auth_users, self.kerberoastable_path_len,
             self.asreproastable_path_len, self.high_admin_comps, self.server_2003,
-            self.server_2008, self.everyone_printspool
+            self.server_2008, self.spoolbug, self.passnotreqd
         ]
         sheet = self.workbook._sheets[2]
         self.write_single_cell(sheet, 1, 1, "Domain Users to Domain Admins")
         self.write_single_cell(sheet, 1, 2, "Everyone to Domain Admins")
-        self.write_single_cell(
-            sheet, 1, 3, "Authenticated Users to Domain Admins")
+        self.write_single_cell(sheet, 1, 3, "Authenticated Users to Domain Admins")
         font = styles.Font(bold=True)
         sheet.cell(1, 1).font = font
         sheet.cell(1, 2).font = font
@@ -763,25 +762,40 @@ class LowHangingFruit(object):
         self.write_column_data(
             sheet, "Windows Server 2008(Expire 2020): {}", results)
 
-    def everyone_printspool(self, sheet):
+    def spoolbug(self, sheet):
         list_query = """OPTIONAL MATCH (c1:Computer)-[r1:AdminTo*1..]->(c2:Computer {domain:{domain}})
-                        WHERE NOT c1 = c2
-                        OPTIONAL MATCH (c3:Computer)-[:MemberOf*1..]->(:Group)-[r2:AdminTo*1..]->(c4:Computer {domain:{domain}})
-                        WHERE NOT c3 = c4
-                        WITH collect(c1) + collect(c3) AS temp
-                        UNWIND temp as computers
-                        RETURN DISTINCT(computers.name)
-                        ORDER BY computers.name ASC
-                        """
+                            OPTIONAL MATCH (c3:Computer)-[:MemberOf*1..]->(:Group)-[r2:AdminTo]->(c4:Computer {domain:{domain}})
+                            WITH collect(c1) + collect(c3) AS temp
+                            UNWIND temp as computers
+                            RETURN DISTINCT(computers.name),COUNT(computers)
+                            ORDER BY computers.name ASC
+                            """
 
         session = self.driver.session()
         results = []
 
         for result in session.run(list_query, domain=self.domain):
-            results.append(result[0])
+            results.append("{} - {}".format(result[0], result[1]))
 
         session.close()
-        self.write_column_data(sheet, "Everyone SpoolSample Relay: {}", results)
+        self.write_column_data(
+            sheet, "SpoolBug Relay From: {}", results)
+
+    def passnotreqd(self, sheet):
+        list_query = """MATCH (u:User)
+                            WHERE u.passwordnotreqd = True
+                            RETURN u.name,u.enabled
+                            """
+
+        session = self.driver.session()
+        results = []
+
+        for result in session.run(list_query, domain=self.domain):
+            results.append("{} - {}".format(result[0], result[1]))
+
+        session.close()
+        self.write_column_data(
+            sheet, "PasswordNotReqd - Enabled {}", results)
 
 class CriticalAssets(object):
     def __init__(self, driver, domain, workbook):
@@ -806,7 +820,7 @@ class CriticalAssets(object):
             self.admins_on_dc, self.rdp_on_dc, self.gpo_on_dc, self.admin_on_exch,
             self.rdp_on_exch, self.gpo_on_exch, self.da_controllers,
             self.da_sessions, self.gpo_on_da, self.da_equiv_controllers,
-            self.da_equiv_sessions, self.gpo_on_da_equiv, self.acl_domain
+            self.da_equiv_sessions, self.gpo_on_da_equiv, self.dcsync
         ]
         sheet = self.workbook._sheets[1]
         for f in func_list:
@@ -1094,10 +1108,13 @@ class CriticalAssets(object):
         self.write_column_data(
             sheet, "High Value User GPO Controllers: {}", results)
 
-    def acl_domain(self, sheet):
-        list_query = """MATCH (n)-[r]->(u:Domain {name: {domain}})
-                            WHERE r.isacl=true
-                            RETURN DISTINCT  n.name
+    def dcsync(self, sheet):
+        list_query = """MATCH (n1)-[:MemberOf|GetChanges*1..]->(u:Domain {name: {domain}}) 
+                            WITH n1,u 
+                            MATCH (n1)-[:MemberOf|GetChangesAll*1..]->(u) 
+                            WITH n1,u 
+                            MATCH (n1)-[:MemberOf|GetChanges|GetChangesAll*1..]->(u) 
+                            RETURN DISTINCT(n1.name)
                             """
         session = self.driver.session()
         results = []
@@ -1107,7 +1124,7 @@ class CriticalAssets(object):
 
         session.close()
         self.write_column_data(
-            sheet, "Explicit ACL on domain: {}", results)
+            sheet, "DCSync Principals: {}", results)
 
 
 class CrossDomain(object):
@@ -1434,8 +1451,7 @@ class kerberos(object):
         func_list = [
             self.shortest_path_everyone, self.shortest_path_auth_users,
             self.shortest_path_domain_users, self.unconstrained,
-            self.allow_to_delegation, self.kerberoastable, self.asreproastable,
-            self.ldap_delegation
+            self.allow_to_delegation, self.kerberoastable, self.asreproastable
         ]
         sheet = self.workbook._sheets[5]
         self.write_single_cell(
@@ -1508,7 +1524,7 @@ class kerberos(object):
     def unconstrained(self, sheet):
         list_query = """MATCH (g:Group {domain: {domain}})
                             WHERE g.objectsid =~ "(?i)S-1-5.*-516"
-                            MATCH (c:Computer {unconstraineddelegation: True,enabled: True,domain: {domain}})
+                            MATCH (c:Computer {unconstraineddelegation: True,domain: {domain}})
                             WHERE NOT (c)-[:MemberOf]->(g)
                             RETURN c.name
                             """
@@ -1569,22 +1585,6 @@ class kerberos(object):
         session.close()
         self.write_column_data(
             sheet, "ASReproastable Users", results)
-
-    def ldap_delegation(self, sheet):
-        list_query = """MATCH (n)-[:AllowedToDelegate|AllowedToDelegate*1..]->(m {domain:{domain}})
-                        WITH DISTINCT(n) as object
-                        WHERE ANY (x IN object.allowedtodelegate WHERE x =~ "ldap/.*")
-                        RETURN object.name
-                        """
-
-        session = self.driver.session()
-        results = []
-        for result in session.run(list_query, domain=self.domain):
-            results.append(result[0])
-
-        session.close()
-        self.write_column_data(
-            sheet, "AllowedDelegation to LDAP", results)
 
 
 class MainMenu(cmd.Cmd):
