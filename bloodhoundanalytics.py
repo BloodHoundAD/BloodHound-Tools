@@ -1270,7 +1270,8 @@ class Privileges(object):
         func_list = [
             self.da_members, self.high_value_members, self.user_local_admin,
             self.groups_local_admin, self.local_admin_inbound,
-            self.most_session_user, self.most_session_computer, self.laps
+            self.most_session_user, self.most_session_computer, self.laps,
+            self.highvalue_protectedgroup
         ]
         sheet = self.workbook._sheets[4]
 
@@ -1424,6 +1425,23 @@ class Privileges(object):
         session.close()
         self.write_column_data(
             sheet, "LAPS Rights: {}", results)
+
+    def highvalue_protectedgroup(self, sheet):
+        list_query = """MATCH (g:Group {domain:{domain}})
+                        WHERE g.objectsid ENDS WITH '-525'
+                        OPTIONAL MATCH (u:User {domain:{domain}})-[:MemberOf*1..]->(:Group {highvalue:True})
+                        WHERE NOT (u)-[:MemberOf*1..]->(g)
+                        RETURN DISTINCT(u.name)
+                        """
+        session = self.driver.session()
+        results = []
+
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
+
+        session.close()
+        self.write_column_data(
+            sheet, "High Value Users not in ProtectedGroup: {}", results)
 
 
 class kerberos(object):
