@@ -27,7 +27,6 @@ class Messages(object):
     def input_default(self, prompt, default):
         return raw_input("%s [%s] " % (prompt, default)) or default
 
-
 class FrontPage(object):
     def __init__(self, driver, domain, workbook):
         self.driver = driver
@@ -174,6 +173,14 @@ class FrontPage(object):
         for result in session.run(query, domain=self.domain):
             Computers_to_da = result[0]
 
+        query = """MATCH(n:User)
+                    WHERE n.name =~ 'GUEST@.*'
+                    RETURN n.enabled
+                    """
+
+        for result in session.run(query, domain=self.domain):
+            Guest_account = result[0]
+
         session.close()
         self.write_single_cell(sheet, 2, 3, "Computers With Local Admin Data: {}%".format(
             computer_local_admin_pct))
@@ -185,6 +192,8 @@ class FrontPage(object):
             sheet, 5, 3, "Users with attack path to Domain Admin: {}%".format(Users_to_da))
         self.write_single_cell(
             sheet, 6, 3, "Computers with attack path to Domain Admin: {}%".format(Computers_to_da))
+        self.write_single_cell(
+            sheet, 7, 3, "Guest Account: {}".format(Guest_account))
 
     def create_highvalue_list(self, sheet):
         list_query = """MATCH (n {highvalue: True,domain: {domain}})
@@ -199,7 +208,6 @@ class FrontPage(object):
 
         session.close()
         self.write_column_data(sheet, "High Value List: {}", results)
-
 
 class LowHangingFruit(object):
     def __init__(self, driver, domain, workbook):
@@ -795,7 +803,7 @@ class LowHangingFruit(object):
 
         session.close()
         self.write_column_data(
-            sheet, "PasswordNotReqd - Enabled {}", results)
+            sheet, "PasswordNotReqd: {}", results)
 
 class CriticalAssets(object):
     def __init__(self, driver, domain, workbook):
@@ -1126,7 +1134,6 @@ class CriticalAssets(object):
         self.write_column_data(
             sheet, "DCSync Principals: {}", results)
 
-
 class CrossDomain(object):
     def __init__(self, driver, domain, workbook):
         self.driver = driver
@@ -1244,8 +1251,7 @@ class CrossDomain(object):
         self.write_column_data(
             sheet, "Computers with Foreign Session: {}", results)
 
-
-class Privileges(object):
+class Organization(object):
     def __init__(self, driver, domain, workbook):
         self.driver = driver
         self.domain = domain
@@ -1266,7 +1272,7 @@ class Privileges(object):
     def write_single_cell(self, sheet, row, column, text):
         sheet.cell(row, column, value=text)
 
-    def do_high_privileges(self):
+    def do_Organization(self):
         func_list = [
             self.da_members, self.high_value_members, self.user_local_admin,
             self.groups_local_admin, self.local_admin_inbound,
@@ -1443,7 +1449,6 @@ class Privileges(object):
         self.write_column_data(
             sheet, "High Value Users not in ProtectedGroup: {}", results)
 
-
 class kerberos(object):
     def __init__(self, driver, domain, workbook):
         self.driver = driver
@@ -1469,7 +1474,8 @@ class kerberos(object):
         func_list = [
             self.shortest_path_everyone, self.shortest_path_auth_users,
             self.shortest_path_domain_users, self.unconstrained,
-            self.allow_to_delegation, self.kerberoastable, self.asreproastable
+            self.allow_to_delegation, self.kerberoastable,self.kerberoast_to_highvalue,
+            self.asreproastable, self.asrep_to_highvalue
         ]
         sheet = self.workbook._sheets[5]
         self.write_single_cell(
@@ -1589,6 +1595,22 @@ class kerberos(object):
         self.write_column_data(
             sheet, "Kerberoastable Users", results)
 
+    def kerberoast_to_highvalue(self, sheet):
+        list_query = """MATCH (u:User {hasspn:true}),(n),p=shortestpath((u)-[*1..]->(n))
+                        WHERE n.highvalue = true AND n.domain = {domain}
+                        RETURN DISTINCT(u.name)
+                        ORDER BY u.name ASC
+                        """
+
+        session = self.driver.session()
+        results = []
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
+
+        session.close()
+        self.write_column_data(
+            sheet, "Kerberoast to highvalue", results)
+
     def asreproastable(self, sheet):
         list_query = """MATCH (u:User {domain:{domain},dontreqpreauth:True})
                         RETURN u.name
@@ -1604,6 +1626,21 @@ class kerberos(object):
         self.write_column_data(
             sheet, "ASReproastable Users", results)
 
+    def asrep_to_highvalue(self, sheet):
+        list_query = """MATCH (u:User {dontreqpreauth:True}),(n),p=shortestpath((u)-[*1..]->(n))
+                        WHERE n.highvalue = true AND n.domain = {domain}
+                        RETURN DISTINCT(u.name)
+                        ORDER BY u.name ASC
+                        """
+
+        session = self.driver.session()
+        results = []
+        for result in session.run(list_query, domain=self.domain):
+            results.append(result[0])
+
+        session.close()
+        self.write_column_data(
+            sheet, "AsReproast to highvalue", results)
 
 class MainMenu(cmd.Cmd):
     def __init__(self):
@@ -1740,7 +1777,7 @@ class MainMenu(cmd.Cmd):
         print "Generating High Privileges"
         print "----------------------------------"
         print ""
-        self.privilege.do_high_privileges()
+        self.org.do_Organization()
         print ""
         print "----------------------------------"
         print "Generating Kerberos"
@@ -1756,7 +1793,7 @@ class MainMenu(cmd.Cmd):
         self.low = LowHangingFruit(self.driver, self.domain, self.workbook)
         self.front = FrontPage(self.driver, self.domain, self.workbook)
         self.cross = CrossDomain(self.driver, self.domain, self.workbook)
-        self.privilege = Privileges(self.driver, self.domain, self.workbook)
+        self.org = Organization(self.driver, self.domain, self.workbook)
         self.kerb = kerberos(self.driver, self.domain, self.workbook)
         self.save_workbook()
 
@@ -1767,7 +1804,7 @@ class MainMenu(cmd.Cmd):
         wb.create_sheet(title="Critical Assets")
         wb.create_sheet(title="Low Hanging Fruit")
         wb.create_sheet(title="Cross Domain Attacks")
-        wb.create_sheet(title="High Privileges")
+        wb.create_sheet(title="Organization")
         wb.create_sheet(title="Kerberos")
         self.workbook = wb
 
@@ -1786,7 +1823,6 @@ class MainMenu(cmd.Cmd):
                 adjusted_width = (max_length + 2) * 1.2
                 worksheet.column_dimensions[column].width = adjusted_width
         self.workbook.save(self.filename)
-
 
 if __name__ == '__main__':
     try:
