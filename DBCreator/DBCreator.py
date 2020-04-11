@@ -161,12 +161,9 @@ class MainMenu(cmd.Cmd):
         for index in session.run("CALL db.indexes"):
             session.run("DROP {}".format(index['description']))
 
-        session.run("CREATE CONSTRAINT ON (c:User) ASSERT c.name IS UNIQUE")
-        session.run("CREATE CONSTRAINT ON (c:Group) ASSERT c.name IS UNIQUE")
-        session.run("CREATE CONSTRAINT ON (c:Computer) ASSERT c.name IS UNIQUE")
-        session.run("CREATE CONSTRAINT ON (c:Domain) ASSERT c.name IS UNIQUE")
-        session.run("CREATE CONSTRAINT ON (c:OU) ASSERT c.guid IS UNIQUE")
-        session.run("CREATE CONSTRAINT ON (c:GPO) ASSERT c.name IS UNIQUE")
+        session.run(
+            "CREATE CONSTRAINT id_constraint ON (c:Base) ASSERT c.objectid IS UNIQUE")
+        session.run("CREATE INDEX name_index FOR (n:Base) ON (n.name)")
 
         session.close()
 
