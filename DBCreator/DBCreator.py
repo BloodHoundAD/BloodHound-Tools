@@ -31,6 +31,14 @@ class Messages():
     def input_default(self, prompt, default):
         return input("%s [%s] " % (prompt, default)) or default
 
+    def input_yesno(self, prompt, default):
+        temp = input(prompt + " " + ("Y" if default else "y") + "/" + ("n" if default else "N") + " ")
+        if temp == "y" or temp == "Y":
+            return True
+        elif temp == "n" or temp == "N":
+            return False
+        return default
+
 
 class MainMenu(cmd.Cmd):
     def __init__(self):
@@ -38,6 +46,7 @@ class MainMenu(cmd.Cmd):
         self.url = "bolt://localhost:7687"
         self.username = "neo4j"
         self.password = "neo4jj"
+        self.use_encryption = False
         self.driver = None
         self.connected = False
         self.num_nodes = 500
@@ -92,17 +101,22 @@ class MainMenu(cmd.Cmd):
         print("DB Url: {}".format(self.url))
         print("DB Username: {}".format(self.username))
         print("DB Password: {}".format(self.password))
+        print("Use encryption: {}".format(self.use_encryption))
         print("")
         self.url = self.m.input_default("Enter DB URL", self.url)
         self.username = self.m.input_default(
             "Enter DB Username", self.username)
         self.password = self.m.input_default(
             "Enter DB Password", self.password)
+
+        self.use_encryption = self.m.input_yesno(
+            "Use encryption?", self.use_encryption)
         print("")
         print("New Settings:")
         print("DB Url: {}".format(self.url))
         print("DB Username: {}".format(self.username))
         print("DB Password: {}".format(self.password))
+        print("Use encryption: {}".format(self.use_encryption))
         print("")
         print("Testing DB Connection")
         self.test_db_conn()
@@ -175,7 +189,7 @@ class MainMenu(cmd.Cmd):
             self.driver.close()
         try:
             self.driver = GraphDatabase.driver(
-                self.url, auth=(self.username, self.password))
+                self.url, auth=(self.username, self.password), encrypted=self.use_encryption)
             self.connected = True
             print("Database Connection Successful!")
         except:
