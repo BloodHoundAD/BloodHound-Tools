@@ -126,12 +126,21 @@ class MainMenu(cmd.Cmd):
         if passed != "":
             try:
                 self.num_nodes = int(passed)
-                return
+                if self.num_nodes < 282:
+                    self.num_nodes = 500
+                    self.do_setnodes("")
+                else:
+                    return
             except ValueError:
                 pass
-
-        self.num_nodes = int(self.m.input_default(
-            "Number of nodes of each type to generate", self.num_nodes))
+        else:
+            self.num_nodes = int(self.m.input_default(
+                "Number of nodes of each type to generate (min value: 282)", self.num_nodes))
+            if self.num_nodes < 282:
+                self.num_nodes = 500
+                self.do_setnodes("")
+            else:
+                return
 
     def do_setdomain(self, args):
         passed = args
@@ -161,6 +170,7 @@ class MainMenu(cmd.Cmd):
         print("Clearing Database")
         d = self.driver
         session = d.session()
+        """
         num = 1
         while num > 0:
             result = session.run(
@@ -178,6 +188,10 @@ class MainMenu(cmd.Cmd):
         session.run(
             "CREATE CONSTRAINT id_constraint ON (c:Base) ASSERT c.objectid IS UNIQUE")
         session.run("CREATE INDEX name_index FOR (n:Base) ON (n.name)")
+        """
+
+        session.run("match (a) -[r] -> () delete a, r")
+        session.run("match (a) delete a")
 
         session.close()
 
