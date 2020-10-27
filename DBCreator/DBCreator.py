@@ -45,7 +45,7 @@ class MainMenu(cmd.Cmd):
         self.m = Messages()
         self.url = "bolt://localhost:7687"
         self.username = "neo4j"
-        self.password = "neo4jj"
+        self.password = "password"
         self.use_encryption = False
         self.driver = None
         self.connected = False
@@ -126,21 +126,25 @@ class MainMenu(cmd.Cmd):
         if passed != "":
             try:
                 self.num_nodes = int(passed)
+                """
                 if self.num_nodes < 282:
                     self.num_nodes = 500
                     self.do_setnodes("")
                 else:
                     return
+                """
             except ValueError:
                 pass
         else:
             self.num_nodes = int(self.m.input_default(
-                "Number of nodes of each type to generate (min value: 282)", self.num_nodes))
+                "Number of nodes of each type to generate", self.num_nodes))
+            """
             if self.num_nodes < 282:
                 self.num_nodes = 500
                 self.do_setnodes("")
             else:
                 return
+            """
 
     def do_setdomain(self, args):
         passed = args
@@ -488,6 +492,8 @@ class MainMenu(cmd.Cmd):
         variance = int(math.ceil(math.log10(self.num_nodes)))
         it_users = []
 
+        print("\n\nNUM GROUPS BASE:", num_groups_base)
+
         print("Calculated {} groups per user with a variance of - {}".format(num_groups_base, variance*2))
 
         for user in users:
@@ -500,9 +506,11 @@ class MainMenu(cmd.Cmd):
             if (sample > len(possible_groups)):
                 sample = int(math.floor(float(len(possible_groups)) / 4))
 
-            if (sample == 0):
+            if (sample <= 1):
                 continue
 
+            print("\n\nPOSSIBLE GROUPS:\n", possible_groups)
+            print("\n\nSAMPLE:\n", sample)
             to_add = random.sample(possible_groups, sample)
 
             for group in to_add:
@@ -522,7 +530,12 @@ class MainMenu(cmd.Cmd):
         print("Adding local admin rights")
         it_groups = [x for x in groups if "IT" in x]
         random.shuffle(it_groups)
-        super_groups = random.sample(it_groups, 4)
+        print("LEN IT_GROUPS:", len(it_groups))
+        if len(it_groups) <= 4:
+            max_lim = random.randint(1, len(it_groups) - 1)
+        else:
+            max_lim = 4
+        super_groups = random.sample(it_groups, max_lim)
         super_group_num = int(math.floor(len(computers) * .85))
 
         it_groups = [x for x in it_groups if not x in super_groups]
