@@ -1,5 +1,6 @@
 # BloodHound Database Creator
 
+Base on [DBCreator](https://github.com/BloodHoundAD/BloodHound-Tools/tree/master/DBCreator) by SpecterOps.
 This python script will generate a randomized data set for testing BloodHound features and analysis.
 
 ## Requirements
