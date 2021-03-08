@@ -169,11 +169,8 @@ class MainMenu(cmd.Cmd):
                 num = int(r['count(n)'])
 
         print("Resetting Schema")
-        for constraint in session.run("CALL db.constraints"):
-            session.run("DROP {}".format(constraint['description']))
-
-        for index in session.run("CALL db.indexes"):
-            session.run("DROP {}".format(index['description']))
+        for constraint in session.run("call db.schemaStatements()"):
+            session.run("{}".format(constraint['dropStatement']))
 
         session.run(
             "CREATE CONSTRAINT id_constraint ON (c:Base) ASSERT c.objectid IS UNIQUE")
@@ -274,7 +271,7 @@ class MainMenu(cmd.Cmd):
         base_statement = "MERGE (n:Base {name:$gpo, objectid:$guid}) SET n:GPO"
         session.run(base_statement, gpo=cn("DEFAULT DOMAIN POLICY"), guid=ddp)
         session.run(base_statement, gpo=cn(
-            "DEFAULT DOMAIN CONTROLLERS POLICY"), guid=ddp)
+            "DEFAULT DOMAIN CONTROLLERS POLICY"), guid=ddcp)
         session.run("MERGE (n:Base {name:$ou, objectid:$guid, blocksInheritance: false}) SET n:OU", ou=cn(
             "DOMAIN CONTROLLERS"), guid=dcou)
 
