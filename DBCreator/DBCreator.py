@@ -197,7 +197,7 @@ class MainMenu(cmd.Cmd):
 
     def do_clear_and_generate(self, args):
         self.test_db_conn()
-        self.do_cleardb()
+        self.do_cleardb(args)
         self.generate_data()
 
     def split_seq(self, iterable, size):
