@@ -9,7 +9,7 @@ This script requires Python 3.7+, as well as the neo4j-driver. The script will o
 The Neo4j Driver can be installed using pip:
 
 ```
-pip install neo4j-driver
+pip install neo4j
 ```
 
 or
@@ -32,7 +32,7 @@ python DBCreator.py
 - connect - Connects to the database using supplied credentials
 - setnodes - Set the number of nodes to generate (defaults to 500, this is a safe number!)
 - setdomain - Set the domain name
-- cleardb - Clears the database and sets the schema properly
-- generate - Generates random data in the database
+- cleardb - Clears the database and resets the schema
+- generate - Generates random data in the database and sets the schema
 - clear_and_generate - Connects to the database, clears the DB, sets the schema, and generates random data
 - exit - Exits the script
