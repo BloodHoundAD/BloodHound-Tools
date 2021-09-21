@@ -8,7 +8,7 @@ This script requires Python 3.7+, as well as the `neo4j` module. The script will
 
 ## Running
 
-Ensure that all files in this repo are in the same directory.
+Open a terminal and run the following commands:
 
 ```sh
 $ git clone https://github.com/nicolas-carolo/BloodHound-Tools
