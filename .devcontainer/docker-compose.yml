@@ -1,0 +1,37 @@
+version: '3.9'
+
+services:
+  neo4j:
+    image: neo4j:latest
+    environment:
+      - NEO4J_AUTH=neo4j/bloodhound
+    expose:
+      - "7474"
+      - "7687"
+    ports:
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - default
+
+  bh-tools:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    user: vscode
+    command: sleep infinity
+    volumes:
+      # Update this to wherever you want VS Code to mount the folder of your project
+      - ..:/workspace
+    depends_on:
+      - neo4j
+    networks:
+      - default
+
+volumes:
+  neo4j_data:
+
+networks:
+  default:

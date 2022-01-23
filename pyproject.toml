@@ -1,0 +1,38 @@
+[tool.poetry]
+name = "bloodhound-tools"
+version = "0.0.2"
+description = ""
+authors = ["rvazarkar", "andyrobbins", "byt3bl33d3r", "voutilad"]
+readme = "README.md"
+homepage = "https://github.com/BloodHoundAD/BloodHound-Tools"
+repository = "https://github.com/BloodHoundAD/BloodHound-Tools"
+exclude = ["tests"]
+include = ["LICENSE", "bh_tools/data/*"]
+license = ""
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+
+packages = [
+    { include = "bh_tools"}
+]
+
+[tool.poetry.scripts]
+bh-dbcreator = 'bh_tools.db_creator:main'
+bh-analytics = 'bh_tools.analytics:main'
+
+[tool.poetry.dependencies]
+python = "^3.10"
+neo4j = "^4.4.1"
+
+[tool.poetry.dev-dependencies]
+pytest = "*"
+pytest-asyncio = "*"
+flake8 = "*"
+black = "*"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

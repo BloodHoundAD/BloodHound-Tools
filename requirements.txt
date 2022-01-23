@@ -1,0 +1,5 @@
+neo4j==4.4.1; python_version >= "3.6" \
+    --hash=sha256:6b61d6b0a98f775dba7260009be549574b0f0bf6ea2d6a2bd1eb72ecbbed7308
+pytz==2021.3; python_version >= "3.6" \
+    --hash=sha256:3672058bc3453457b622aab7a1c3bfd5ab0bdae451512f6cf25f64ed37f5b87c \
+    --hash=sha256:acad2d8b20a1af07d4e4c9d2e9285c5ed9104354062f275f3fcd88dcef4f1326
