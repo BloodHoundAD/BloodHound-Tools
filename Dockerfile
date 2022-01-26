@@ -10,6 +10,6 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-COPY --from=build-stage /tmp/code/dist/ .
+COPY --from=build-stage /tmp/code/dist .
 
-RUN pip install --no-cache-dir --no-index --find-links . .
+RUN pip install --no-cache-dir --no-index --find-links . bloodhound-tools
