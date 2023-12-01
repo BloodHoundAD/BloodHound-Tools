@@ -162,26 +162,12 @@ class MainMenu(cmd.Cmd):
         d = self.driver
         session = d.session()
         num = 1
-        while num > 0:
-            result = session.run(
-                "MATCH (n) WITH n LIMIT 10000 DETACH DELETE n RETURN count(n)")
-            for r in result:
-                num = int(r['count(n)'])
-
-        print("Resetting Schema")
-        for constraint in session.run("CALL db.constraints"):
-            session.run("DROP {}".format(constraint['description']))
-
-        for index in session.run("CALL db.indexes"):
-            session.run("DROP {}".format(index['description']))
-
-        session.run(
-            "CREATE CONSTRAINT id_constraint ON (c:Base) ASSERT c.objectid IS UNIQUE")
-        session.run("CREATE INDEX name_index FOR (n:Base) ON (n.name)")
-
+        session.run("MATCH (n) DETACH DELETE n")
+        session.run("match (a) -[r] -> () delete a, r")
+        session.run("match (a) delete a")
         session.close()
 
-        print("DB Cleared and Schema Set")
+        print("DB Cleared")
 
     def test_db_conn(self):
         self.connected = False
@@ -353,10 +339,10 @@ class MainMenu(cmd.Cmd):
 
             if (len(props) > 500):
                 session.run(
-                    'UNWIND {props} as prop MERGE (n:Base {objectid: prop.id}) SET n:Computer, n += prop.props WITH n MERGE (m:Group {name:$gname}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
+                    'UNWIND $props as prop MERGE (n:Base {objectid: prop.id}) SET n:Computer, n += prop.props WITH n MERGE (m:Group {name:$gname}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
                 props = []
         session.run(
-            'UNWIND {props} as prop MERGE (n:Base {objectid:prop.id}) SET n:Computer, n += prop.props WITH n MERGE (m:Group {name:$gname}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
+            'UNWIND $props as prop MERGE (n:Base {objectid:prop.id}) SET n:Computer, n += prop.props WITH n MERGE (m:Group {name:$gname}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
 
         print("Creating Domain Controllers")
         for state in states:
@@ -401,11 +387,11 @@ class MainMenu(cmd.Cmd):
             }})
             if (len(props) > 500):
                 session.run(
-                    'UNWIND {props} as prop MERGE (n:Base {objectid:prop.id}) SET n:User, n += prop.props WITH n MATCH (m:Group {name:$gname}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
+                    'UNWIND $props as prop MERGE (n:Base {objectid:prop.id}) SET n:User, n += prop.props WITH n MATCH (m:Group {name:$gname}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
                 props = []
 
         session.run(
-            'UNWIND {props} as prop MERGE (n:Base {objectid:prop.id}) SET n:User, n += prop.props WITH n MATCH (m:Group {name:$gname}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
+            'UNWIND $props as prop MERGE (n:Base {objectid:prop.id}) SET n:User, n += prop.props WITH n MATCH (m:Group {name:$gname}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props, gname=group_name)
 
         print("Generating Group Nodes")
         weighted_parts = ["IT"] * 7 + ["HR"] * 13 + \
@@ -420,11 +406,11 @@ class MainMenu(cmd.Cmd):
             props.append({'name': group_name, 'id': sid})
             if len(props) > 500:
                 session.run(
-                    'UNWIND {props} as prop MERGE (n:Base {objectid:prop.id}) SET n:Group, n.name=prop.name', props=props)
+                    'UNWIND $props as prop MERGE (n:Base {objectid:prop.id}) SET n:Group, n.name=prop.name', props=props)
                 props = []
 
         session.run(
-            'UNWIND {props} as prop MERGE (n:Base {objectid:prop.id}) SET n:Group, n.name=prop.name', props=props)
+            'UNWIND $props as prop MERGE (n:Base {objectid:prop.id}) SET n:Group, n.name=prop.name', props=props)
 
         print("Adding Domain Admins to Local Admins of Computers")
         session.run(
@@ -458,11 +444,11 @@ class MainMenu(cmd.Cmd):
 
             if (len(props) > 500):
                 session.run(
-                    'UNWIND {props} AS prop MERGE (n:Group {name:prop.a}) WITH n,prop MERGE (m:Group {name:prop.b}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
+                    'UNWIND $props AS prop MERGE (n:Group {name:prop.a}) WITH n,prop MERGE (m:Group {name:prop.b}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
                 props = []
 
         session.run(
-            'UNWIND {props} AS prop MERGE (n:Group {name:prop.a}) WITH n,prop MERGE (m:Group {name:prop.b}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
+            'UNWIND $props AS prop MERGE (n:Group {name:prop.a}) WITH n,prop MERGE (m:Group {name:prop.b}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
 
         print("Adding users to groups")
         props = []
@@ -496,11 +482,11 @@ class MainMenu(cmd.Cmd):
 
             if len(props) > 500:
                 session.run(
-                    'UNWIND {props} AS prop MERGE (n:User {name:prop.a}) WITH n,prop MERGE (m:Group {name:prop.b}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
+                    'UNWIND $props AS prop MERGE (n:User {name:prop.a}) WITH n,prop MERGE (m:Group {name:prop.b}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
                 props = []
 
         session.run(
-            'UNWIND {props} AS prop MERGE (n:User {name:prop.a}) WITH n,prop MERGE (m:Group {name:prop.b}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
+            'UNWIND $props AS prop MERGE (n:User {name:prop.a}) WITH n,prop MERGE (m:Group {name:prop.b}) WITH n,m MERGE (n)-[:MemberOf]->(m)', props=props)
 
         it_users = it_users + das
         it_users = list(set(it_users))
@@ -534,7 +520,7 @@ class MainMenu(cmd.Cmd):
 
             if len(props) > 500:
                 session.run(
-                    'UNWIND {props} AS prop MERGE (n:Group {name:prop.a}) WITH n,prop MERGE (m:Computer {name:prop.b}) WITH n,m MERGE (n)-[:AdminTo]->(m)', props=props)
+                    'UNWIND $props AS prop MERGE (n:Group {name:prop.a}) WITH n,prop MERGE (m:Computer {name:prop.b}) WITH n,m MERGE (n)-[:AdminTo]->(m)', props=props)
                 props = []
 
         for x in super_groups:
@@ -543,11 +529,11 @@ class MainMenu(cmd.Cmd):
 
             if len(props) > 500:
                 session.run(
-                    'UNWIND {props} AS prop MERGE (n:Group {name:prop.a}) WITH n,prop MERGE (m:Computer {name:prop.b}) WITH n,m MERGE (n)-[:AdminTo]->(m)', props=props)
+                    'UNWIND $props AS prop MERGE (n:Group {name:prop.a}) WITH n,prop MERGE (m:Computer {name:prop.b}) WITH n,m MERGE (n)-[:AdminTo]->(m)', props=props)
                 props = []
 
         session.run(
-            'UNWIND {props} AS prop MERGE (n:Group {name:prop.a}) WITH n,prop MERGE (m:Computer {name:prop.b}) WITH n,m MERGE (n)-[:AdminTo]->(m)', props=props)
+            'UNWIND $props AS prop MERGE (n:Group {name:prop.a}) WITH n,prop MERGE (m:Computer {name:prop.b}) WITH n,m MERGE (n)-[:AdminTo]->(m)', props=props)
 
         print("Adding RDP/ExecuteDCOM/AllowedToDelegateTo")
         count = int(math.floor(len(computers) * .1))
@@ -558,7 +544,7 @@ class MainMenu(cmd.Cmd):
             props.append({'a': user, 'b': comp})
 
         session.run(
-            'UNWIND {props} AS prop MERGE (n:User {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:CanRDP]->(m)', props=props)
+            'UNWIND $props AS prop MERGE (n:User {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:CanRDP]->(m)', props=props)
 
         props = []
         for i in range(0, count):
@@ -567,7 +553,7 @@ class MainMenu(cmd.Cmd):
             props.append({'a': user, 'b': comp})
 
         session.run(
-            'UNWIND {props} AS prop MERGE (n:User {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:ExecuteDCOM]->(m)', props=props)
+            'UNWIND $props AS prop MERGE (n:User {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:ExecuteDCOM]->(m)', props=props)
 
         props = []
         for i in range(0, count):
@@ -576,7 +562,7 @@ class MainMenu(cmd.Cmd):
             props.append({'a': user, 'b': comp})
 
         session.run(
-            'UNWIND {props} AS prop MERGE (n:Group {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:CanRDP]->(m)', props=props)
+            'UNWIND $props AS prop MERGE (n:Group {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:CanRDP]->(m)', props=props)
 
         props = []
         for i in range(0, count):
@@ -585,7 +571,7 @@ class MainMenu(cmd.Cmd):
             props.append({'a': user, 'b': comp})
 
         session.run(
-            'UNWIND {props} AS prop MERGE (n:Group {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:ExecuteDCOM]->(m)', props=props)
+            'UNWIND $props AS prop MERGE (n:Group {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:ExecuteDCOM]->(m)', props=props)
 
         props = []
         for i in range(0, count):
@@ -594,7 +580,7 @@ class MainMenu(cmd.Cmd):
             props.append({'a': user, 'b': comp})
 
         session.run(
-            'UNWIND {props} AS prop MERGE (n:User {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:AllowedToDelegate]->(m)', props=props)
+            'UNWIND $props AS prop MERGE (n:User {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:AllowedToDelegate]->(m)', props=props)
 
         props = []
         for i in range(0, count):
@@ -605,7 +591,7 @@ class MainMenu(cmd.Cmd):
             props.append({'a': user, 'b': comp})
 
         session.run(
-            'UNWIND {props} AS prop MERGE (n:Computer {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:AllowedToDelegate]->(m)', props=props)
+            'UNWIND $props AS prop MERGE (n:Computer {name: prop.a}) MERGE (m:Computer {name: prop.b}) MERGE (n)-[r:AllowedToDelegate]->(m)', props=props)
 
         print("Adding sessions")
         max_sessions_per_user = int(math.ceil(math.log10(self.num_nodes)))
@@ -624,11 +610,11 @@ class MainMenu(cmd.Cmd):
 
             if (len(props) > 500):
                 session.run(
-                    'UNWIND {props} AS prop MERGE (n:User {name:prop.a}) WITH n,prop MERGE (m:Computer {name:prop.b}) WITH n,m MERGE (m)-[:HasSession]->(n)', props=props)
+                    'UNWIND $props AS prop MERGE (n:User {name:prop.a}) WITH n,prop MERGE (m:Computer {name:prop.b}) WITH n,m MERGE (m)-[:HasSession]->(n)', props=props)
                 props = []
 
         session.run(
-            'UNWIND {props} AS prop MERGE (n:User {name:prop.a}) WITH n,prop MERGE (m:Computer {name:prop.b}) WITH n,m MERGE (m)-[:HasSession]->(n)', props=props)
+            'UNWIND $props AS prop MERGE (n:User {name:prop.a}) WITH n,prop MERGE (m:Computer {name:prop.b}) WITH n,m MERGE (m)-[:HasSession]->(n)', props=props)
 
         print("Adding Domain Admin ACEs")
         group_name = "DOMAIN ADMINS@{}".format(self.domain)
@@ -638,33 +624,33 @@ class MainMenu(cmd.Cmd):
 
             if len(props) > 500:
                 session.run(
-                    'UNWIND {props} as prop MATCH (n:Computer {name:prop.name}) WITH n MATCH (m:Group {name:$gname}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
+                    'UNWIND $props as prop MATCH (n:Computer {name:prop.name}) WITH n MATCH (m:Group {name:$gname}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
                 props = []
 
         session.run(
-            'UNWIND {props} as prop MATCH (n:Computer {name:prop.name}) WITH n MATCH (m:Group {name:$gname}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
+            'UNWIND $props as prop MATCH (n:Computer {name:prop.name}) WITH n MATCH (m:Group {name:$gname}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
 
         for x in users:
             props.append({'name': x})
 
             if len(props) > 500:
                 session.run(
-                    'UNWIND {props} as prop MATCH (n:User {name:prop.name}) WITH n MATCH (m:Group {name:$gname}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
+                    'UNWIND $props as prop MATCH (n:User {name:prop.name}) WITH n MATCH (m:Group {name:$gname}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
                 props = []
 
         session.run(
-            'UNWIND {props} as prop MATCH (n:User {name:prop.name}) WITH n MATCH (m:Group {name:$gname}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
+            'UNWIND $props as prop MATCH (n:User {name:prop.name}) WITH n MATCH (m:Group {name:$gname}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
 
         for x in groups:
             props.append({'name': x})
 
             if len(props) > 500:
                 session.run(
-                    'UNWIND {props} as prop MATCH (n:Group {name:prop.name}) WITH n MATCH (m:Group {name:$gname}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
+                    'UNWIND $props as prop MATCH (n:Group {name:prop.name}) WITH n MATCH (m:Group {name:$gname}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
                 props = []
 
         session.run(
-            'UNWIND {props} as prop MATCH (n:Group {name:prop.name}) WITH n MATCH (m:Group {name:$gname}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
+            'UNWIND $props as prop MATCH (n:Group {name:prop.name}) WITH n MATCH (m:Group {name:$gname}) WITH m,n MERGE (m)-[r:GenericAll {isacl:true}]->(n)', props=props, gname=group_name)
 
         print("Creating OUs")
         temp_comps = computers
@@ -682,11 +668,11 @@ class MainMenu(cmd.Cmd):
                 props.append({'compname': c, 'ouguid': guid, 'ouname': ouname})
                 if len(props) > 500:
                     session.run(
-                        'UNWIND {props} as prop MERGE (n:Computer {name:prop.compname}) WITH n,prop MERGE (m:Base {objectid:prop.ouguid, name:prop.ouname, blocksInheritance: false}) SET m:OU WITH n,m,prop MERGE (m)-[:Contains]->(n)', props=props)
+                        'UNWIND $props as prop MERGE (n:Computer {name:prop.compname}) WITH n,prop MERGE (m:Base {objectid:prop.ouguid, name:prop.ouname, blocksInheritance: false}) SET m:OU WITH n,m,prop MERGE (m)-[:Contains]->(n)', props=props)
                     props = []
 
         session.run(
-            'UNWIND {props} as prop MERGE (n:Computer {name:prop.compname}) WITH n,prop MERGE (m:Base {objectid:prop.ouguid, name:prop.ouname, blocksInheritance: false}) SET m:OU WITH n,m,prop MERGE (m)-[:Contains]->(n)', props=props)
+            'UNWIND $props as prop MERGE (n:Computer {name:prop.compname}) WITH n,prop MERGE (m:Base {objectid:prop.ouguid, name:prop.ouname, blocksInheritance: false}) SET m:OU WITH n,m,prop MERGE (m)-[:Contains]->(n)', props=props)
 
         temp_users = users
         random.shuffle(temp_users)
@@ -703,11 +689,11 @@ class MainMenu(cmd.Cmd):
                 props.append({'username': c, 'ouguid': guid, 'ouname': ouname})
                 if len(props) > 500:
                     session.run(
-                        'UNWIND {props} as prop MERGE (n:User {name:prop.username}) WITH n,prop MERGE (m:Base {objectid:prop.ouguid, name:prop.ouname, blocksInheritance: false}) SET m:OU WITH n,m,prop MERGE (m)-[:Contains]->(n)', props=props)
+                        'UNWIND $props as prop MERGE (n:User {name:prop.username}) WITH n,prop MERGE (m:Base {objectid:prop.ouguid, name:prop.ouname, blocksInheritance: false}) SET m:OU WITH n,m,prop MERGE (m)-[:Contains]->(n)', props=props)
                     props = []
 
         session.run(
-            'UNWIND {props} as prop MERGE (n:User {name:prop.username}) WITH n,prop MERGE (m:Base {objectid:prop.ouguid, name:prop.ouname, blocksInheritance: false}) SET m:OU WITH n,m,prop MERGE (m)-[:Contains]->(n)', props=props)
+            'UNWIND $props as prop MERGE (n:User {name:prop.username}) WITH n,prop MERGE (m:Base {objectid:prop.ouguid, name:prop.ouname, blocksInheritance: false}) SET m:OU WITH n,m,prop MERGE (m)-[:Contains]->(n)', props=props)
 
         props = []
         for x in list(ou_guid_map.keys()):
@@ -715,7 +701,7 @@ class MainMenu(cmd.Cmd):
             props.append({'b': guid})
 
         session.run(
-            'UNWIND {props} as prop MERGE (n:OU {objectid:prop.b}) WITH n MERGE (m:Domain {name:$domain}) WITH n,m MERGE (m)-[:Contains]->(n)', props=props, domain=self.domain)
+            'UNWIND $props as prop MERGE (n:OU {objectid:prop.b}) WITH n MERGE (m:Domain {name:$domain}) WITH n,m MERGE (m)-[:Contains]->(n)', props=props, domain=self.domain)
 
         print("Creating GPOs")
 
@@ -762,35 +748,35 @@ class MainMenu(cmd.Cmd):
                 p = random.choice(all_principals)
                 p2 = random.choice(gpos)
                 session.run(
-                    'MERGE (n:Group {name:{group}}) MERGE (m {name:{principal}}) MERGE (n)-' + ace_string + '->(m)', group=i, principal=p)
-                session.run('MERGE (n:Group {name:{group}}) MERGE (m:GPO {name:{principal}}) MERGE (n)-' +
+                    'MERGE (n:Group {name:$group}) MERGE (m {name:$principal}) MERGE (n)-' + ace_string + '->(m)', group=i, principal=p)
+                session.run('MERGE (n:Group {name:$group}) MERGE (m:GPO {name:$principal}) MERGE (n)-' +
                             ace_string + '->(m)', group=i, principal=p2)
             elif ace == 'AddMember':
                 p = random.choice(it_groups)
                 session.run(
-                    'MERGE (n:Group {name:{group}}) MERGE (m:Group {name:{principal}}) MERGE (n)-' + ace_string + '->(m)', group=i, principal=p)
+                    'MERGE (n:Group {name:$group}) MERGE (m:Group {name:$principal}) MERGE (n)-' + ace_string + '->(m)', group=i, principal=p)
             elif ace == 'ReadLAPSPassword':
                 p = random.choice(all_principals)
                 targ = random.choice(computers)
                 session.run(
-                    'MERGE (n {name:{principal}}) MERGE (m:Computer {name:{target}}) MERGE (n)-[r:ReadLAPSPassword]->(m)', target=targ, principal=p)
+                    'MERGE (n {name:$principal}) MERGE (m:Computer {name:$target}) MERGE (n)-[r:ReadLAPSPassword]->(m)', target=targ, principal=p)
             else:
                 p = random.choice(it_users)
                 session.run(
-                    'MERGE (n:Group {name:{group}}) MERGE (m:User {name:{principal}}) MERGE (n)-' + ace_string + '->(m)', group=i, principal=p)
+                    'MERGE (n:Group {name:$group}) MERGE (m:User {name:$principal}) MERGE (n)-' + ace_string + '->(m)', group=i, principal=p)
 
         print("Marking some users as Kerberoastable")
         i = random.randint(10, 20)
         i = min(i, len(it_users))
         for user in random.sample(it_users, i):
             session.run(
-                'MATCH (n:User {name:{user}}) SET n.hasspn=true', user=user)
+                'MATCH (n:User {name:$user}) SET n.hasspn=true', user=user)
 
         print("Adding unconstrained delegation to a few computers")
         i = random.randint(10, 20)
         i = min(i, len(computers))
         session.run(
-            'MATCH (n:Computer {name:{user}}) SET n.unconstrainteddelegation=true', user=user)
+            'MATCH (n:Computer {name:$user}) SET n.unconstrainteddelegation=true', user=user)
 
         session.run('MATCH (n:User) SET n.owned=false')
         session.run('MATCH (n:Computer) SET n.owned=false')
